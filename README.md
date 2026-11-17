@@ -1,4 +1,4 @@
-<img src="assets/icon.png" alt="Specsheet logo" width="88" height="88">
+<img src="assets/mark.svg" alt="Specsheet logo" width="88" height="88">
 
 # Specsheet
 
