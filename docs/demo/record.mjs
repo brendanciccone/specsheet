@@ -33,7 +33,7 @@ const mark = fs
   .replace(/width="\d+" height="\d+"/, 'width="132" height="132"');
 
 // Cards match the scenario title cards inside the walkthrough video: dark, left-aligned,
-// a small orange label above a large title. They fade in, and stay long enough to read.
+// a small green label above a large title. They fade in, and stay long enough to read.
 const shell = (inner) =>
   `<body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:${INK};font-family:system-ui,-apple-system,sans-serif">` +
   '<style>@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } } .rise { animation: rise 0.5s ease-out both; }</style>' +
@@ -47,12 +47,12 @@ const brandCard = () =>
 const stepCard = (number, title, sub) =>
   shell(
     '<div class="rise" style="width:74%;max-width:1040px">' +
-      '<div style="display:flex;align-items:center;gap:14px;font-size:20px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#E5322D">' +
-      `<span style="width:36px;height:4px;border-radius:2px;background:#E5322D"></span>Step ${number} of 3</div>` +
+      '<div style="display:flex;align-items:center;gap:14px;font-size:20px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#1F9F78">' +
+      `<span style="width:36px;height:4px;border-radius:2px;background:#1F9F78"></span>Step ${number} of 3</div>` +
       `<div style="margin-top:22px;font-size:64px;line-height:1.1;font-weight:700;letter-spacing:-0.02em;color:${PAPER}">${title}</div>` +
       `<div style="margin-top:20px;font-size:28px;line-height:1.35;color:#A9A7B8;max-width:880px">${sub}</div>` +
       '<div style="display:flex;gap:10px;margin-top:44px">' +
-      [1, 2, 3].map((dot) => `<span style="width:${dot === number ? 44 : 12}px;height:12px;border-radius:6px;background:${dot === number ? '#E5322D' : '#3A3948'}"></span>`).join('') +
+      [1, 2, 3].map((dot) => `<span style="width:${dot === number ? 44 : 12}px;height:12px;border-radius:6px;background:${dot === number ? '#1F9F78' : '#3A3948'}"></span>`).join('') +
       '</div></div>',
   );
 const BRAND_HOLD = 3600;
@@ -128,7 +128,7 @@ await record('c-handoff.webm', async (page) => {
     await page.waitForTimeout(Math.round(hold * 1.45));
   };
   const outline = (locator) =>
-    locator.evaluate((element) => { element.style.outline = '3px solid #E5322D'; element.style.outlineOffset = '3px'; element.style.borderRadius = '4px'; });
+    locator.evaluate((element) => { element.style.outline = '3px solid #1F9F78'; element.style.outlineOffset = '3px'; element.style.borderRadius = '4px'; });
 
   await glide('section[data-block="requirements"]', 2200);
   await glide('section[data-block="flow"]', 2200);
