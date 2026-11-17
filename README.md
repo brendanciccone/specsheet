@@ -1,4 +1,4 @@
-<p><img src="assets/logo.svg" alt="specsheet" width="240" height="60"></p>
+<p><img src="assets/logo.svg" alt="Specsheet" width="240" height="60"></p>
 
 **Turn a ticket and a design into everything engineering needs.**
 
