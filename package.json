@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "description": "Turn a ticket and a design into everything engineering needs. A user flow, walkthrough videos and acceptance criteria, each step run against the design.",
   "license": "MIT",
-  "repository": "github:brendanciccone/specsheet",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/brendanciccone/specsheet.git"
+  },
   "homepage": "https://github.com/brendanciccone/specsheet#readme",
   "author": "Brendan Ciccone",
   "type": "module",
@@ -19,12 +22,13 @@
   "files": [
     "bin",
     "src",
-    "skill",
+    "skills",
     "assets",
     "README.md"
   ],
   "scripts": {
-    "test": "node --test \"test/*.test.js\"",
+    "test": "node --test",
+    "prepublishOnly": "npm test",
     "example": "node bin/specsheet.mjs run examples/contact-form/handoff/HELP-12"
   },
   "engines": {

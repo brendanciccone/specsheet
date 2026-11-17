@@ -1,6 +1,6 @@
 # The logo
 
-The mark is three corners of a design frame, one spec line inside it, and a red cursor
+The mark is three corners of a design frame, one spec line inside it, and a green cursor
 where the fourth corner would be. The frame is the design, the line is the spec, and the
 cursor is the program running it.
 
@@ -9,7 +9,7 @@ cursor is the program running it.
 - `assets/logo.svg` and `logo.png` are the mark with the name beside it.
 - `final.png` shows all of them in use, and `final-mark-only.png` shows the mark alone.
 
-The colours are ink `#15141B`, paper `#F6F4EE` and red `#E5322D`.
+The colours are ink `#15141B`, paper `#F6F4EE` and green `#1F9F78`.
 
 After changing an SVG file in `assets/`, redraw the PNG files and both sheets:
 

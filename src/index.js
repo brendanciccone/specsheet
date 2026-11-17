@@ -51,8 +51,8 @@ function titleCardHtml(title, flowName, position) {
   return (
     '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#15141B;pointer-events:none">' +
     '<div style="width:74%;max-width:1040px;font-family:system-ui,-apple-system,Segoe UI,sans-serif">' +
-    '<div style="display:flex;align-items:center;gap:14px;font-size:20px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#E5322D">' +
-    '<span style="width:36px;height:4px;border-radius:2px;background:#E5322D"></span>' +
+    '<div style="display:flex;align-items:center;gap:14px;font-size:20px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#1F9F78">' +
+    '<span style="width:36px;height:4px;border-radius:2px;background:#1F9F78"></span>' +
     `${escapeHtml(position)}</div>` +
     `<div style="margin-top:22px;font-size:60px;line-height:1.1;font-weight:700;letter-spacing:-0.02em;color:#F6F4EE">${escapeHtml(title)}</div>` +
     `<div style="margin-top:20px;font-size:26px;color:#A9A7B8">${escapeHtml(flowName)}</div>` +

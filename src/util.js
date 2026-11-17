@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -29,14 +30,31 @@ export function resolveKeywords(titles) {
   });
 }
 
+/** Eight hex characters that stay the same for the same text, to tell names apart. */
+export function fingerprint(text) {
+  return createHash('sha256').update(String(text).normalize('NFC')).digest('hex').slice(0, 8);
+}
+
+const SLUG_BYTES = 60;
+
+/**
+ * A name for a file: "Contact form" -> "contact-form". Letters in any script are kept, so
+ * "Оплата" stays "оплата" instead of disappearing. A name that is cut to fit, or that has
+ * no letters or digits at all, ends in a fingerprint of the whole name, so two such names
+ * never share a file. The result is at most 60 bytes, which keeps a file name made of
+ * three of them under the 255-byte limit of common file systems.
+ */
 export function slug(text) {
-  return (
-    String(text)
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 60) || 'item'
-  );
+  const source = String(text).normalize('NFC');
+  const full = source.toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '');
+  if (full && Buffer.byteLength(full) <= SLUG_BYTES) return full;
+  const suffix = `-${fingerprint(source)}`;
+  let kept = '';
+  for (const character of full) {
+    if (Buffer.byteLength(kept + character) > SLUG_BYTES - suffix.length) break;
+    kept += character;
+  }
+  return `${kept.replace(/-+$/, '') || 'item'}${suffix}`;
 }
 
 export function escapeHtml(text) {

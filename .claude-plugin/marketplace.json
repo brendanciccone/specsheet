@@ -1,0 +1,14 @@
+{
+  "name": "specsheet",
+  "owner": {
+    "name": "Brendan Ciccone"
+  },
+  "description": "Specsheet, a Claude skill and program that turns a ticket and a design into a tested handoff for engineering.",
+  "plugins": [
+    {
+      "name": "specsheet",
+      "source": "./",
+      "description": "Turn a ticket and a design into everything engineering needs: a user flow, walkthrough videos and acceptance criteria, each step run against the design."
+    }
+  ]
+}
