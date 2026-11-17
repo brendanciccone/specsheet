@@ -3,7 +3,7 @@
 
 import fs from 'node:fs';
 import { clock, escapeHtml, formatBytes, stripKeyword } from '../util.js';
-import { gherkinLine, scenarioText } from './gherkin.js';
+import { gherkinLine, scenarioText, sharedStart, stepLines, uniqueScenarios } from './gherkin.js';
 import {
   checklistLines,
   commentSections,
@@ -69,6 +69,7 @@ video.walkthrough[hidden] { display: none; }
 pre.error { margin: 4px 0 10px; padding: 10px 12px; overflow-x: auto; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
   color: var(--bad); background: var(--soft); border: 1px solid var(--line); border-radius: 6px; white-space: pre-wrap; }
 figure { margin: 12px 0 22px; }
+.same-shot { margin: 2px 0 18px; color: var(--muted); font-size: 14px; }
 figure img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
 figcaption { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; color: var(--muted); font-size: 13px; }
 ul, ol { margin: 0 0 10px; padding-left: 22px; }
@@ -106,7 +107,10 @@ const VIEW_SCRIPT = `
   // Until a video is played, show the scenario's first screenshot. The video's own
   // first frame is blank.
   document.querySelectorAll('video.walkthrough').forEach(function (video) {
-    var first = (video.closest('article') || video.closest('section')).querySelector('figure img');
+    var first = (video.closest('article') || video.closest('section')).querySelector('figure img, .same-shot');
+    if (first && first.classList.contains('same-shot')) {
+      first = document.querySelector('figure[data-file="' + CSS.escape(first.dataset.file) + '"] img');
+    }
     if (first) video.poster = first.src;
   });
 
@@ -270,6 +274,18 @@ const SCRIPT = `
   function prepare(target, withImages) {
     var clone = target.cloneNode(true);
     clone.querySelectorAll('.no-copy').forEach(function (node) { node.remove(); });
+    clone.querySelectorAll('.same-shot').forEach(function (reference) {
+      var selector = 'figure[data-file="' + CSS.escape(reference.dataset.file) + '"]';
+      if (clone.querySelector(selector)) {
+        reference.querySelectorAll('a').forEach(function (link) { link.replaceWith(link.textContent); });
+        return;
+      }
+      var original = document.querySelector(selector);
+      if (!original) return;
+      var copy = original.cloneNode(true);
+      copy.removeAttribute('id');
+      reference.replaceWith(copy);
+    });
     if (!withImages) {
       clone.querySelectorAll('figure').forEach(function (figure) {
         var note = document.createElement('p');
@@ -378,18 +394,41 @@ function statusClass(status) {
   return 'warn';
 }
 
-function figure(shot, label, viewportLabel) {
+function figure(shot, label, viewportLabel, id) {
   const uri = dataUri(shot.file);
   if (!uri) return '';
   const where = [shot.screen, shot.state].filter(Boolean).join(' · ');
   const caption = [where, viewportLabel, shot.failed ? 'when the step failed' : null].filter(Boolean).join(' — ');
   return (
-    `<figure data-file="${escapeHtml(shot.outFile ?? '')}">` +
+    `<figure id="${id}" data-file="${escapeHtml(shot.outFile ?? '')}">` +
     `<img src="${uri}" alt="${escapeHtml(`Screenshot: ${label}`)}" loading="lazy" />` +
     `<figcaption><span>${escapeHtml(caption)}</span>` +
     '<button type="button" class="no-copy" data-copy="image">Copy image</button></figcaption>' +
     '</figure>'
   );
+}
+
+/**
+ * A step's screenshot. A screen and state that an earlier step already shows get a link to
+ * that picture instead of the same picture again, so scenarios that all start on one page
+ * do not repeat it. The screenshot of a failed step is always shown.
+ */
+function shotHtml(step, scenario, shown) {
+  const file = step.shot.failed ? null : step.shot.outFile;
+  const earlier = file ? shown.files.get(file) : null;
+  if (earlier) {
+    const where = [step.shot.screen, step.shot.state].filter(Boolean).join(' · ');
+    return (
+      `<p class="same-shot" data-file="${escapeHtml(file)}">Same screen as ` +
+      `<a href="#${earlier.id}">step ${earlier.step} of "${escapeHtml(earlier.scenario)}"</a>` +
+      `${where ? ` (${escapeHtml(where)})` : ''}.</p>`
+    );
+  }
+  shown.count += 1;
+  const id = `shot-${shown.count}`;
+  const html = figure(step.shot, `${scenario.title}, ${step.title}`, scenario.viewportLabel, id);
+  if (html && file) shown.files.set(file, { id, step: step.index + 1, scenario: scenario.title });
+  return html;
 }
 
 function stepHtml(step) {
@@ -420,7 +459,7 @@ function flowVideosHtml(flow, flowKey) {
     .join('');
 }
 
-function scenarioHtml(scenario, key, manyViewports, flowKey) {
+function scenarioHtml(scenario, key, manyViewports, flowKey, shown) {
   const meta = [];
   if (scenario.covers.length) meta.push(`Proves ${scenario.covers.join(', ')}`);
   meta.push(scenario.status === 'passed' ? 'Passes' : 'Fails');
@@ -450,7 +489,7 @@ function scenarioHtml(scenario, key, manyViewports, flowKey) {
   const body = scenario.steps
     .map((step) => {
       let html = stepHtml(step);
-      if (step.shot) html += figure(step.shot, `${scenario.title}, ${step.title}`, scenario.viewportLabel);
+      if (step.shot) html += shotHtml(step, scenario, shown);
       return html;
     })
     .join('');
@@ -539,7 +578,8 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
     );
   }
 
-  // Scenarios, one section per flow
+  // Scenarios, one section per flow. Each screenshot appears once on the page.
+  const shown = { files: new Map(), count: 0 };
   model.flows.forEach((flow, flowIndex) => {
     const key = `flow-${flowIndex}`;
     markdown[key] = `## Scenarios: ${flow.name}\n\n${scenariosMarkdown(flow, model, 'gherkin')}`;
@@ -547,7 +587,7 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
       .map((scenario, index) => {
         const scenarioKey = `${key}-scenario-${index}`;
         markdown[scenarioKey] = '```gherkin\n' + scenarioText(scenario, '') + '\n```';
-        return scenarioHtml(scenario, scenarioKey, manyViewports, key);
+        return scenarioHtml(scenario, scenarioKey, manyViewports, key, shown);
       })
       .join('');
     parts.push(`<section data-block="${key}">${head(`Scenarios: ${flow.name}`, { images: true })}${flowVideosHtml(flow, key)}${scenarios}</section>`);
@@ -557,16 +597,19 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
   markdown.checklist = `## Acceptance checklist\n\n${model.flows.map((flow) => checklistLines(flow).join('\n')).join('\n')}`;
   const checklist = model.flows
     .map((flow) => {
-      const seen = new Set();
-      const items = flow.scenarios
-        .filter((scenario) => !seen.has(scenario.title) && seen.add(scenario.title))
+      const scenarios = uniqueScenarios(flow);
+      const shared = sharedStart(scenarios);
+      const start = shared.length
+        ? `<p>Every scenario starts with:</p><ul>${shared.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`
+        : '';
+      const items = scenarios
         .map((scenario) => {
           const ids = scenario.covers.length ? ` (${scenario.covers.join(', ')})` : '';
-          const steps = scenario.steps.map((step) => `<li>${escapeHtml(gherkinLine(step.title))}</li>`).join('');
+          const steps = stepLines(scenario, shared.length).map((line) => `<li>${escapeHtml(line)}</li>`).join('');
           return `<li><strong>${escapeHtml(scenario.title)}</strong>${escapeHtml(ids)}<ul>${steps}</ul></li>`;
         })
         .join('');
-      return `<ul>${items}</ul>`;
+      return `${start}<ul>${items}</ul>`;
     })
     .join('');
   parts.push(`<section data-block="checklist">${head('Acceptance checklist')}${checklist}</section>`);

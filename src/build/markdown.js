@@ -3,7 +3,7 @@
 
 import { sourceLabel } from '../config.js';
 import { clock, escapeMarkdown, formatBytes, plural } from '../util.js';
-import { featureText, gherkinLine } from './gherkin.js';
+import { featureText, sharedStart, stepLines, uniqueScenarios } from './gherkin.js';
 
 const REQUIREMENT_STATUS = { covered: 'Covered', failing: 'Failing', 'not-covered': 'Not covered' };
 const SOURCE = { stated: 'Stated in ticket', inferred: 'Inferred from design' };
@@ -85,15 +85,6 @@ export function requirementsMarkdown(model) {
   return lines.join('\n');
 }
 
-function uniqueScenarios(flow) {
-  const seen = new Set();
-  return flow.scenarios.filter((scenario) => {
-    if (seen.has(scenario.title)) return false;
-    seen.add(scenario.title);
-    return true;
-  });
-}
-
 export function gherkinMarkdown(flow, model) {
   const text = featureText(flow, { title: model.meta.title, ticketKey: model.meta.ticket?.key });
   return '```gherkin\n' + text.trimEnd() + '\n```';
@@ -101,10 +92,13 @@ export function gherkinMarkdown(flow, model) {
 
 export function checklistLines(flow) {
   const lines = [];
-  for (const scenario of uniqueScenarios(flow)) {
+  const scenarios = uniqueScenarios(flow);
+  const shared = sharedStart(scenarios);
+  if (shared.length) lines.push('Every scenario starts with:', ...shared.map((line) => `- ${line}`), '');
+  for (const scenario of scenarios) {
     const ids = scenario.covers.length ? ` (${scenario.covers.join(', ')})` : '';
     lines.push(`- [ ] **${scenario.title}**${ids}`);
-    for (const step of scenario.steps) lines.push(`  - ${gherkinLine(step.title)}`);
+    for (const line of stepLines(scenario, shared.length)) lines.push(`  - ${line}`);
   }
   return lines;
 }

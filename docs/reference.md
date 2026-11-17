@@ -79,11 +79,11 @@ Everything lands in `out/` inside the handoff folder.
 
 | File | What it is |
 |---|---|
-| `handoff.html` | The full handoff as one page, with a copy button on every section. The user flow can be zoomed and dragged, and any screenshot opens full size. The screenshots and videos are inside the file, so it can be sent on its own |
+| `handoff.html` | The full handoff as one page, with a copy button on every section. The user flow can be zoomed and dragged, and any screenshot opens full size. The screenshots and videos are inside the file, so it can be sent on its own. Each screenshot appears once: a later step on the same screen links back to it |
 | `flow.png` | The user flow: screens and states as boxes, actions as arrows |
 | `screens/` | One full-page screenshot per screen, state and screen size |
 | `videos/` | One captioned walkthrough video per flow, every scenario in order |
-| `features/` | One Gherkin feature file per flow, for QA to import |
+| `features/` | One Gherkin feature file per flow, for QA to import. Steps that every scenario opens with are written once, as a `Background` |
 | `checklist.md` | The acceptance checklist |
 | `comment.md` | The text for a Jira comment, split into parts if it is too long for one |
 | `manifest.json` | Every file to attach, with its size |
