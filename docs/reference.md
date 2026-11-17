@@ -124,5 +124,4 @@ The unit tests cover the parts with no browser: reading scenario files, the size
 the findings, the Gherkin, the user flow and the Jira comment. `npm run example` checks
 the rest end to end.
 
-`node docs/demo/record.mjs` records the demo video again, and `node docs/logo/final.mjs`
-redraws the logo files.
+[CONTRIBUTING.md](../CONTRIBUTING.md) lists the other scripts and how to release.
