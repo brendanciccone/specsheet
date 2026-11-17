@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Help · Northwind</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="top">
+      <span class="brand">Northwind</span>
+      <nav aria-label="Main">
+        <a href="#">Dashboard</a>
+        <a href="#">Projects</a>
+        <a href="/help" aria-current="page">Help</a>
+      </nav>
+    </header>
+
+    <main>
+      <h1>Help</h1>
+      <p class="lead">Answers to common questions, and a way to reach us.</p>
+
+      <section aria-labelledby="faq-title">
+        <h2 id="faq-title">Common questions</h2>
+        <details>
+          <summary>How do I export my projects?</summary>
+          <p>Open a project, choose Share, then Export. You can export as CSV or PDF.</p>
+        </details>
+        <details>
+          <summary>Can I invite people outside my team?</summary>
+          <p>Yes. Guests can view and comment on the projects you share with them.</p>
+        </details>
+        <details>
+          <summary>How do I change my email address?</summary>
+          <p>Go to Settings, then Account. We send a confirmation link to the new address.</p>
+        </details>
+      </section>
+
+      <section aria-labelledby="contact-title" class="card">
+        <h2 id="contact-title">Contact us</h2>
+        <p>Can't find an answer? Send us a message and we'll reply within one working day.</p>
+
+        <form id="contact-form" novalidate>
+          <div class="field">
+            <label for="name">Name</label>
+            <input id="name" name="name" autocomplete="name" aria-describedby="name-error" />
+            <p id="name-error" class="field-error" role="alert" hidden></p>
+          </div>
+          <div class="field">
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" autocomplete="email" aria-describedby="email-error" />
+            <p id="email-error" class="field-error" role="alert" hidden></p>
+          </div>
+          <div class="field">
+            <label for="message">Message</label>
+            <textarea id="message" name="message" rows="5" aria-describedby="message-error"></textarea>
+            <p id="message-error" class="field-error" role="alert" hidden></p>
+          </div>
+          <div id="form-error" class="banner banner-error" role="alert" hidden>
+            <strong>We couldn't send your message.</strong>
+            <span>Your text is still here. Check your connection and try again.</span>
+          </div>
+          <button type="submit" class="primary">Send message</button>
+        </form>
+
+        <div id="sent" class="banner banner-success" role="status" hidden>
+          <strong>Message sent</strong>
+          <span>Thanks, <span id="sent-name"></span>. We'll reply to <span id="sent-email"></span> within one working day.</span>
+          <button type="button" id="send-another" class="secondary">Send another message</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

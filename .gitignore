@@ -1,0 +1,8 @@
+node_modules/
+.DS_Store
+.claude/
+
+# Everything a run writes. "npm run example" makes the example's again.
+examples/**/out/
+**/out/.run/
+*.tgz

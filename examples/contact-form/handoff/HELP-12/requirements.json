@@ -1,0 +1,11 @@
+{
+  "requirements": [
+    { "id": "R1", "text": "A visitor can send a message with their name, email and text.", "source": "stated" },
+    { "id": "R2", "text": "An invalid email address shows an error and nothing is sent.", "source": "stated" },
+    { "id": "R3", "text": "A confirmation is shown once the message is sent.", "source": "stated" },
+    { "id": "R4", "text": "If sending fails, the visitor sees an error and their message is kept.", "source": "inferred" }
+  ],
+  "openQuestions": [
+    "No loading state is designed for while a message is being sent. Is one needed?"
+  ]
+}

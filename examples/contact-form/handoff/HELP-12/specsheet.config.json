@@ -1,0 +1,15 @@
+{
+  "title": "Add a contact form to the Help page",
+  "ticket": { "key": "HELP-12", "url": null },
+  "design": { "source": "claude-code", "link": null, "rebuilt": false },
+  "baseURL": "http://localhost:4173",
+  "webServer": {
+    "command": "node server.mjs",
+    "cwd": "../..",
+    "url": "http://localhost:4173/help"
+  },
+  "viewports": [{ "name": "Desktop", "width": 1440, "height": 900 }],
+  "data": "mock",
+  "format": "gherkin",
+  "videos": "flow"
+}

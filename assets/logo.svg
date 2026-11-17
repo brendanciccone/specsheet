@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 326 80" width="326" height="80" role="img" aria-label="specsheet">
+  <style>
+    .specsheet-ink { fill: #15141B; stroke: #15141B; }
+    @media (prefers-color-scheme: dark) { .specsheet-ink { fill: #F6F4EE; stroke: #F6F4EE; } }
+  </style>
+  <g transform="translate(4 8)">
+    <path class="specsheet-ink" d="M7.5 19.5 V13.5 a6 6 0 0 1 6 -6 H19.5 M37.5 7.5 H43.5 a6 6 0 0 1 6 6 V19.5 M19.5 49.5 H13.5 a6 6 0 0 1 -6 -6 V37.5" stroke-width="6.5" stroke-linecap="round" style="fill:none"/>
+    <rect class="specsheet-ink" x="17.5" y="18.5" width="22" height="6.5" rx="3.25" stroke-width="0"/>
+    <path d="M29.5 31.5 L55.5 41.5 L44.5 46 L40 57.5 Z" fill="#E5322D" stroke="#E5322D" stroke-width="4.5" stroke-linejoin="round"/>
+  </g>
+  <text class="specsheet-ink" x="82" y="44" dominant-baseline="central" stroke-width="0" font-family="system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="46" font-weight="700" letter-spacing="-1.2">specsheet</text>
+</svg>
