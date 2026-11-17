@@ -57,8 +57,10 @@ async function view(scrollTo, prepare) {
 // Show one moment of the walkthrough video in its player.
 async function showVideoFrame(tab) {
   const shown = await tab.evaluate(async (second) => {
-    const video = document.querySelector('video.walkthrough');
-    if (!video || video.hidden || video.error) return false;
+    // The flow's walkthrough, not a video of one scenario.
+    const video = document.getElementById('flow-0-video-0');
+    if (!video) return 'missing';
+    if (video.hidden || video.error) return false;
     video.currentTime = second;
     await new Promise((resolve) => {
       video.addEventListener('seeked', resolve, { once: true });
@@ -67,6 +69,9 @@ async function showVideoFrame(tab) {
     video.pause();
     return !video.hidden && !video.error && video.readyState >= 2;
   }, VIDEO_SECOND);
+  if (shown === 'missing') {
+    throw new Error('The example has no walkthrough video. Install ffmpeg, which joins the scenarios into one video, and run this again.');
+  }
   if (!shown) {
     throw new Error('The walkthrough video could not play. Install Google Chrome, which can play H.264 video, and run this again.');
   }

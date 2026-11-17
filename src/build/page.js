@@ -273,7 +273,6 @@ const SCRIPT = `
 
   function prepare(target, withImages) {
     var clone = target.cloneNode(true);
-    clone.querySelectorAll('.no-copy').forEach(function (node) { node.remove(); });
     clone.querySelectorAll('.same-shot').forEach(function (reference) {
       var selector = 'figure[data-file="' + CSS.escape(reference.dataset.file) + '"]';
       if (clone.querySelector(selector)) {
@@ -286,6 +285,8 @@ const SCRIPT = `
       copy.removeAttribute('id');
       reference.replaceWith(copy);
     });
+    // After the screenshots shown earlier are back, so their buttons go too.
+    clone.querySelectorAll('.no-copy').forEach(function (node) { node.remove(); });
     if (!withImages) {
       clone.querySelectorAll('figure').forEach(function (figure) {
         var note = document.createElement('p');
