@@ -2,7 +2,7 @@
 //   node docs/screenshot/screenshot.mjs
 //
 // It runs the example for real, then shows four parts of the handoff page it produced,
-// each in a window: the summary and requirements, the user flow, the walkthrough video,
+// each in a window on paper: the summary and requirements, the user flow, the walkthrough video,
 // and a scenario with its steps and screenshots.
 //
 // The walkthrough video is H.264, which Playwright's own Chromium cannot play, so this
@@ -91,24 +91,17 @@ const frame = ([image, title]) =>
 const side = 2 * SHOWN + 200;
 const composition = await browser.newPage({ viewport: { width: side, height: 2 * (height + 36) + 200 } });
 await composition.setContent(`<body><style>
-  body { margin: 0; height: 100vh; position: relative; overflow: hidden; background: #0B3D30;
+  body { margin: 0; height: 100vh; background: #F6F4EE;
     display: grid; grid-template-columns: repeat(2, ${SHOWN}px); gap: 40px; place-content: center;
     font: 600 14px system-ui, -apple-system, sans-serif; }
-  /* A soft green mesh: a few blurred blobs in the brand's greens. */
-  .mesh { position: absolute; inset: -12%; filter: blur(80px); background:
-    radial-gradient(38% 42% at 18% 18%, #7FE0B8 0%, transparent 70%),
-    radial-gradient(42% 46% at 84% 14%, #1F9F78 0%, transparent 72%),
-    radial-gradient(48% 50% at 78% 86%, #0F5C55 0%, transparent 72%),
-    radial-gradient(44% 46% at 18% 84%, #2DB184 0%, transparent 72%),
-    radial-gradient(30% 30% at 52% 50%, #B6F2D8 0%, transparent 70%),
-    #0B3D30; }
-  .window { position: relative; border-radius: 12px; overflow: hidden; background: #fff;
-    box-shadow: 0 30px 80px rgba(4, 30, 22, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.25); }
+  /* Paper, the logo's light colour, with a soft shadow under each window. */
+  .window { border-radius: 12px; overflow: hidden; background: #fff;
+    box-shadow: 0 6px 20px rgba(21, 20, 27, 0.06), 0 0 0 1px rgba(21, 20, 27, 0.08); }
   .bar { position: relative; height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 14px; background: #ECEAE3; }
   .bar span { width: 12px; height: 12px; border-radius: 50%; background: #C9C6BD; }
   .bar b { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #5F5E6E; font-weight: 600; }
   img { display: block; }
-</style><div class="mesh"></div>${panels.map(frame).join('')}</body>`);
+</style>${panels.map(frame).join('')}</body>`);
 const png = await composition.screenshot();
 
 // Encode as WebP in the browser, which keeps ffmpeg out of it.
