@@ -1,11 +1,13 @@
-<p><img src="assets/logo.svg" alt="Specsheet" width="240" height="60"></p>
+<img src="assets/icon.png" alt="Specsheet logo" width="88" height="88">
+
+# Specsheet
 
 [![CI](https://github.com/brendanciccone/specsheet/actions/workflows/ci.yml/badge.svg)](https://github.com/brendanciccone/specsheet/actions/workflows/ci.yml)
 
-**Turn a ticket and a design into everything engineering needs.**
+Turn a ticket and a design into everything engineering needs.
 
 Give Claude a ticket and a design that runs in a browser. You get back a user flow, a
-walkthrough video, Gherkin or a checklist with a screenshot beside every step, and the
+walkthrough video, Gherkin or a checklist with a screenshot for every step, and the
 states the design is missing. Every step is run against the design, so the spec matches it.
 
 ![Four parts of the handoff page for the example ticket HELP-12: the summary and requirements, the user flow with the missing "sending" state drawn as not shown, the walkthrough video paused on the email error, and the "Invalid email is rejected" scenario with its steps and screenshot](docs/screenshot/screenshot.webp)
