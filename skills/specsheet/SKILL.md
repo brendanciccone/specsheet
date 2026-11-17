@@ -1,6 +1,6 @@
 ---
 name: specsheet
-description: Turn a ticket and a design into everything engineering needs, as a tested handoff for engineering and QA. Use when a designer asks to hand off a design, prepare a ticket for developers, write acceptance criteria or Gherkin for a prototype, or says "run Specsheet". Takes a ticket (Jira or pasted text) and a design made in Claude Code, Claude Design, Paper or Figma, and produces a user flow, walkthrough videos, Gherkin or a checklist with a screenshot beside each step, and a list of missing states, then offers to post them to the Jira ticket.
+description: Turn a ticket and a design into everything engineering needs, as a tested handoff for engineering and QA. Use from the very first message when a designer asks to hand off a design or a ticket, prepare a ticket for developers, write acceptance criteria, Gherkin or a QA checklist for a prototype, or mentions Specsheet. It sets up the project itself on first use, so do not ask the user to install anything first. Takes a ticket (Jira or pasted text) and a design made in Claude Code, Claude Design, Paper or Figma, and produces a user flow, walkthrough videos, Gherkin or a checklist with a screenshot beside each step, and a list of missing states, then offers to post them to the Jira ticket.
 ---
 
 # Specsheet: design handoff
@@ -28,17 +28,28 @@ handoff files. No model is involved in a run.
 7. **Do not make design decisions.** When a state, a message or a behaviour is missing,
    ask the designer. If they have no answer yet, record an open question.
 
-## Before you start
+## Set up the project first
 
-Check the program is available with `npx specsheet help`. If it is not, tell the user and
-offer to install it:
+The skill is the only thing the user installs. You set up the rest, in the project that
+holds the design, before step 1:
 
-```bash
-npm install --save-dev specsheet
-npx playwright install chromium
-```
+1. Run `npx --no specsheet help`. If it prints the usage, the project is ready. Skip to
+   the handoff folder below.
+2. Check `node --version` is 20 or later. If it is not, tell the user to install a newer
+   Node from nodejs.org, and stop.
+3. Ask once: "Specsheet needs its program in this project and a browser to run the
+   scenarios in. I'll run these two commands. OK?" and show them:
 
-Until Specsheet is published, install it from its folder or repository instead of by name.
+   ```bash
+   npm install --save-dev github:brendanciccone/specsheet
+   npx playwright install chromium
+   ```
+
+   Run them on a yes. With no `package.json`, run `npm init -y` first and say so. If the
+   project uses pnpm or yarn (a `pnpm-lock.yaml` or `yarn.lock`), use `pnpm add -D` or
+   `yarn add -D` instead of `npm install --save-dev`.
+
+Do this once per project. Later handoffs in the same project start at step 1.
 
 Each handoff lives in its own folder in the project, named after the ticket:
 `handoff/<TICKET-KEY>/`. Create it with `npx specsheet init handoff/<TICKET-KEY>`.

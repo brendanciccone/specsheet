@@ -71,7 +71,7 @@ function videoNote(mode) {
 
 /** Copy the skill to where Claude Code looks for skills. Replaces an earlier copy of it. */
 function installSkill(flags) {
-  const source = fileURLToPath(new URL('../skill/specsheet', import.meta.url));
+  const source = fileURLToPath(new URL('../skills/specsheet', import.meta.url));
   const base = flags.project ? path.resolve('.claude') : path.join(os.homedir(), '.claude');
   const target = path.join(base, 'skills', 'specsheet');
   const existed = fs.existsSync(target);
