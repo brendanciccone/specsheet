@@ -1,8 +1,12 @@
 // Draws docs/screenshot/screenshot.webp, the picture of a handoff at the top of the README.
 //   node docs/screenshot/screenshot.mjs
 //
-// It runs the example for real, then shows two parts of the handoff page it produced,
-// each in a window: the top of the page, and the user flow.
+// It runs the example for real, then shows four parts of the handoff page it produced,
+// each in a window: the summary and requirements, the user flow, the walkthrough video,
+// and a scenario with its steps and screenshots.
+//
+// The walkthrough video is H.264, which Playwright's own Chromium cannot play, so this
+// uses Google Chrome when it is installed.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,11 +18,11 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const handoff = 'examples/contact-form/handoff/HELP-12';
 const page = path.join(root, handoff, 'out', 'handoff.html');
 const target = path.join(root, 'docs', 'screenshot', 'screenshot.webp');
-const INK = '#15141B';
-const GREEN = '#1F9F78';
-// Each window shows the page at this size, in CSS pixels.
-const VIEW = { width: 900, height: 980 };
+// Each window shows the page at this size, in CSS pixels, drawn this wide.
+const VIEW = { width: 900, height: 860 };
 const SHOWN = 880;
+// The moment of the walkthrough to show: scenario 2, with the email error on screen.
+const VIDEO_SECOND = 23.5;
 
 // A failed run can leave the page of an earlier run behind, so only a passing run counts.
 const run = spawnSync(process.execPath, ['bin/specsheet.mjs', 'run', handoff], { cwd: root, encoding: 'utf8' });
@@ -26,9 +30,14 @@ if (run.status !== 0 || !fs.existsSync(page)) {
   throw new Error(`The example did not pass, so the picture was not redrawn.\n${run.stdout ?? ''}${run.stderr ?? ''}`);
 }
 
-const browser = await chromium.launch();
+let browser;
+try {
+  browser = await chromium.launch({ channel: 'chrome' });
+} catch {
+  browser = await chromium.launch();
+}
 
-async function view(scrollTo) {
+async function view(scrollTo, prepare) {
   const tab = await browser.newPage({ viewport: VIEW, deviceScaleFactor: 2 });
   await tab.goto(pathToFileURL(page).href);
   await tab.waitForLoadState('networkidle');
@@ -38,30 +47,68 @@ async function view(scrollTo) {
       window.scrollTo(0, element.getBoundingClientRect().top + window.scrollY - 24);
     }, scrollTo);
   }
+  if (prepare) await prepare(tab);
   await tab.waitForTimeout(300);
   const png = await tab.screenshot();
   await tab.close();
   return `data:image/png;base64,${png.toString('base64')}`;
 }
 
-const top = await view(null);
-const flow = await view('section[data-block="flow"]');
+// Show one moment of the walkthrough video in its player.
+async function showVideoFrame(tab) {
+  const shown = await tab.evaluate(async (second) => {
+    // The flow's walkthrough, not a video of one scenario.
+    const video = document.getElementById('flow-0-video-0');
+    if (!video) return 'missing';
+    if (video.hidden || video.error) return false;
+    video.currentTime = second;
+    await new Promise((resolve) => {
+      video.addEventListener('seeked', resolve, { once: true });
+      setTimeout(resolve, 5000);
+    });
+    video.pause();
+    return !video.hidden && !video.error && video.readyState >= 2;
+  }, VIDEO_SECOND);
+  if (shown === 'missing') {
+    throw new Error('The example has no walkthrough video. Install ffmpeg, which joins the scenarios into one video, and run this again.');
+  }
+  if (!shown) {
+    throw new Error('The walkthrough video could not play. Install Google Chrome, which can play H.264 video, and run this again.');
+  }
+}
+
+const panels = [
+  [await view(null), 'handoff.html · Summary'],
+  [await view('section[data-block="flow"]'), 'handoff.html · User flow'],
+  [await view('section[data-block="flow-0"]', showVideoFrame), 'handoff.html · Walkthrough video'],
+  [await view('article[data-block="flow-0-scenario-1"]'), 'handoff.html · Scenarios'],
+];
 
 const height = Math.round((VIEW.height * SHOWN) / VIEW.width);
-const window = (image, title) =>
+const frame = ([image, title]) =>
   `<div class="window"><div class="bar"><span></span><span></span><span></span><b>${title}</b></div>` +
   `<img src="${image}" width="${SHOWN}" height="${height}" alt=""></div>`;
-const composition = await browser.newPage({ viewport: { width: 2 * SHOWN + 200, height: height + 196 } });
+const side = 2 * SHOWN + 200;
+const composition = await browser.newPage({ viewport: { width: side, height: 2 * (height + 36) + 200 } });
 await composition.setContent(`<body><style>
-  body { margin: 0; height: 100vh; display: flex; align-items: center; justify-content: center; gap: 40px;
-    background: radial-gradient(1200px 700px at 50% 120%, ${GREEN}55, transparent 70%), ${INK};
+  body { margin: 0; height: 100vh; position: relative; overflow: hidden; background: #0B3D30;
+    display: grid; grid-template-columns: repeat(2, ${SHOWN}px); gap: 40px; place-content: center;
     font: 600 14px system-ui, -apple-system, sans-serif; }
-  .window { border-radius: 12px; overflow: hidden; background: #fff; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5); }
+  /* A soft green mesh: a few blurred blobs in the brand's greens. */
+  .mesh { position: absolute; inset: -12%; filter: blur(80px); background:
+    radial-gradient(38% 42% at 18% 18%, #7FE0B8 0%, transparent 70%),
+    radial-gradient(42% 46% at 84% 14%, #1F9F78 0%, transparent 72%),
+    radial-gradient(48% 50% at 78% 86%, #0F5C55 0%, transparent 72%),
+    radial-gradient(44% 46% at 18% 84%, #2DB184 0%, transparent 72%),
+    radial-gradient(30% 30% at 52% 50%, #B6F2D8 0%, transparent 70%),
+    #0B3D30; }
+  .window { position: relative; border-radius: 12px; overflow: hidden; background: #fff;
+    box-shadow: 0 30px 80px rgba(4, 30, 22, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.25); }
   .bar { position: relative; height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 14px; background: #ECEAE3; }
   .bar span { width: 12px; height: 12px; border-radius: 50%; background: #C9C6BD; }
   .bar b { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #5F5E6E; font-weight: 600; }
   img { display: block; }
-</style>${window(top, 'handoff.html')}${window(flow, 'handoff.html · User flow')}</body>`);
+</style><div class="mesh"></div>${panels.map(frame).join('')}</body>`);
 const png = await composition.screenshot();
 
 // Encode as WebP in the browser, which keeps ffmpeg out of it.

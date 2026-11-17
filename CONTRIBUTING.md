@@ -29,7 +29,7 @@ then restart your terminal.
 - `node docs/logo/final.mjs`: redraws the logo PNG files and the logo sheets after a
   change to an SVG file in `assets/`
 - `node docs/screenshot/screenshot.mjs`: runs the example and redraws the picture at the
-  top of the README
+  top of the README. It needs Google Chrome, which can play the walkthrough video
 
 ## Submitting changes
 

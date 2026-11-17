@@ -8,7 +8,7 @@ Give Claude a ticket and a design that runs in a browser. You get back a user fl
 walkthrough video, Gherkin or a checklist with a screenshot beside every step, and the
 states the design is missing. Every step is run against the design, so the spec matches it.
 
-![The handoff page for the example ticket HELP-12: a summary that flags the missing "sending" state, the requirements each marked covered, and the user flow from the ready form to sent, invalid-email and send-failed, with the sending state drawn as not shown](docs/screenshot/screenshot.webp)
+![Four parts of the handoff page for the example ticket HELP-12: the summary and requirements, the user flow with the missing "sending" state drawn as not shown, the walkthrough video paused on the email error, and the "Invalid email is rejected" scenario with its steps and screenshot](docs/screenshot/screenshot.webp)
 
 Free and open source, under the MIT license.
 
