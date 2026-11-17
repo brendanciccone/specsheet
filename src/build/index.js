@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { loadConfig, loadRequirements } from '../config.js';
 import { readStaticFlows } from '../check.js';
-import { readJson, slug, writeFile } from '../util.js';
+import { fingerprint, readJson, slug, writeFile } from '../util.js';
 import { featureText } from './gherkin.js';
 import { renderFlowSvg } from './graph.js';
 import { checklistMarkdown, commentSections, splitComment } from './markdown.js';
@@ -92,6 +92,26 @@ function joinVideos(sources, target, workDir) {
   }
 }
 
+/**
+ * Hands out file names made from flow and scenario names, each one once. Different names
+ * can make the same slug ("Sign in" and "Sign-in"), and the second file would then
+ * replace the first. So a name that is taken gets a fingerprint of what it is for, and a
+ * number if even that is taken. Names are compared ignoring case, because macOS and
+ * Windows treat "οδος" and "οδοσ" as one file. The build hands them out in the same order
+ * every time, so a rebuild gives the same names.
+ */
+function fileNames() {
+  const taken = new Set();
+  const key = (name) => name.normalize('NFKC').toUpperCase().toLowerCase();
+  return (name, owner) => {
+    let unique = name;
+    if (taken.has(key(unique))) unique = `${name}-${fingerprint(owner)}`;
+    for (let number = 2; taken.has(key(unique)); number += 1) unique = `${name}-${fingerprint(owner)}-${number}`;
+    taken.add(key(unique));
+    return unique;
+  };
+}
+
 async function renderPng(svg, file, width) {
   const { chromium } = await import('@playwright/test');
   const browser = await chromium.launch();
@@ -170,13 +190,17 @@ export async function build(dir, { png = true, videos, log = () => {} } = {}) {
   }
 
   // Point every step's screenshot at its file, and keep the screenshots of failed steps.
+  const failedName = fileNames();
   for (const flow of model.flows) {
     for (const scenario of flow.scenarios) {
       for (const step of scenario.steps) {
         if (!step.shot) continue;
         const key = `${scenario.viewport.name}::${step.shot.screen}/${step.shot.state}`;
         if (step.shot.failed) {
-          const name = `failed-${slug(scenario.title)}-step-${step.index + 1}.${slug(scenario.viewport.name)}.png`;
+          const name = `${failedName(
+            `failed-${slug(scenario.title)}-step-${step.index + 1}.${slug(scenario.viewport.name)}`,
+            [flow.name, scenario.title, step.index, scenario.viewport.name].join('\n'),
+          )}.png`;
           const target = path.join(out, 'screens', name);
           fs.mkdirSync(path.dirname(target), { recursive: true });
           fs.copyFileSync(step.shot.file, target);
@@ -195,6 +219,7 @@ export async function build(dir, { png = true, videos, log = () => {} } = {}) {
   const videoMode = videos ?? config.videos;
   model.meta.videos = videoMode;
   if (videoMode !== 'none') {
+    const videoName = fileNames();
     const useFfmpeg = hasFfmpeg();
     if (videoMode === 'flow' && !useFfmpeg) {
       log('ffmpeg is not installed, so the scenarios could not be joined into one video per flow. Wrote one video per scenario.');
@@ -208,7 +233,11 @@ export async function build(dir, { png = true, videos, log = () => {} } = {}) {
         if (!recorded.length) continue;
 
         if (videoMode === 'flow' && useFfmpeg) {
-          const base = path.join(out, 'videos', `${slug(flow.name)}.${slug(viewport.name)}`);
+          const base = path.join(
+            out,
+            'videos',
+            videoName(`${slug(flow.name)}.${slug(viewport.name)}`, [flow.name, viewport.name].join('\n')),
+          );
           const joined = joinVideos(recorded.map((scenario) => scenario.video), base, path.join(out, '.run', 'join'));
           if (joined) {
             const file = path.relative(out, joined.file).split(path.sep).join('/');
@@ -224,7 +253,14 @@ export async function build(dir, { png = true, videos, log = () => {} } = {}) {
         }
 
         for (const scenario of recorded) {
-          const base = path.join(out, 'videos', `${slug(flow.name)}--${slug(scenario.title)}.${slug(viewport.name)}`);
+          const base = path.join(
+            out,
+            'videos',
+            videoName(
+              `${slug(flow.name)}--${slug(scenario.title)}.${slug(viewport.name)}`,
+              [flow.name, scenario.title, viewport.name].join('\n'),
+            ),
+          );
           const file = exportVideo(scenario.video, base, useFfmpeg);
           scenario.videoFile = path.relative(out, file).split(path.sep).join('/');
           scenario.videoPath = file;
@@ -235,8 +271,9 @@ export async function build(dir, { png = true, videos, log = () => {} } = {}) {
   }
 
   // Feature files and checklist.
+  const featureName = fileNames();
   for (const flow of model.flows) {
-    const file = path.join(out, 'features', `${slug(flow.name)}.feature`);
+    const file = path.join(out, 'features', `${featureName(slug(flow.name), flow.name)}.feature`);
     writeFile(file, featureText(flow, { title: model.meta.title, ticketKey: model.meta.ticket?.key }));
     add(file, `Gherkin for the "${flow.name}" flow, for QA to import`, 'feature');
   }
