@@ -29,10 +29,11 @@
   "scripts": {
     "test": "node --test",
     "prepublishOnly": "npm test",
-    "example": "node bin/specsheet.mjs run examples/contact-form/handoff/HELP-12"
+    "example": "node bin/specsheet.mjs run examples/contact-form/handoff/HELP-12",
+    "verify": "npm test"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "dependencies": {
     "@playwright/test": "^1.59.0"

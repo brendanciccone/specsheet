@@ -5,7 +5,7 @@ releasing it.
 
 ## Local development setup
 
-Specsheet uses npm, on Node 20 or later. The repository ships a `package-lock.json`.
+Specsheet uses npm, on Node 22 or later (`.node-version` names 24, the version releases are built with). The repository ships a `package-lock.json`.
 
 ```bash
 npm install
@@ -20,6 +20,8 @@ installed locally. It wraps `npm` and `npx` to block known-malicious packages an
 quarantine versions under 48 hours old at install time. Install it once with the command
 in [its README's Installation section](https://github.com/AikidoSec/safe-chain#installation),
 then restart your terminal.
+
+The repo has its own gate as well: `.npmrc` sets `min-release-age=7`, so npm 11.10 or later refuses any version under 7 days old whenever it resolves dependencies (installing, adding or updating a package). `npm ci` installs the existing lockfile without checking ages again, and Renovate waits the same 7 days before proposing an update.
 
 ## Scripts
 

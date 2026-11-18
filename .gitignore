@@ -1,8 +1,16 @@
 node_modules/
 .DS_Store
-.claude/
 
 # Everything a run writes. "npm run example" makes the example's again.
 examples/**/out/
 **/out/.run/
 *.tgz
+
+# Local environment and secrets
+.env*
+
+# Claude Code local settings (the rest of .claude/ is committed)
+.claude/*.local.json
+
+# iCloud conflict copies
+* [0-9].*
