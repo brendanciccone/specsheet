@@ -34,7 +34,9 @@ Options
 
 Exit codes for "run"
   0  every scenario passed     1  at least one step failed     2  the run could not start
-"doctor" exits with 1 when a run could not start on this computer, and 0 otherwise.
+Exit codes for "doctor"
+  0  this computer has what a run needs
+  1  it does not: the browser does not start, or videos are wanted and cannot be recorded
 `;
 
 function parseArgs(argv) {
@@ -240,7 +242,10 @@ async function main() {
     const report = await browserReport(config?.browser ?? 'chromium', { videos: (config?.videos ?? 'flow') !== 'none' });
     for (const line of report.lines) console.log(line);
     console.log(hasFfmpeg() ? 'ffmpeg is installed. A flow\'s scenarios can be joined into one walkthrough video.' : FFMPEG_MISSING);
-    // A missing ffmpeg only changes how the videos come out. A browser that does not start stops a run.
+    // Two different ffmpegs. The one checked just above only joins videos, so without it a
+    // run still works. Playwright's own records them: when videos are wanted and it is
+    // missing, a run cannot start, and that is part of "ready", like a browser that does
+    // not start.
     if (!report.ready) process.exitCode = 1;
     return;
   }

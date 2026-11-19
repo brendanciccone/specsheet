@@ -188,6 +188,18 @@ test('the command line prints its version, and init keeps run output out of git'
   }
 });
 
+test('doctor exits with 1 when the browser is not there', () => {
+  // An empty folder for Playwright's downloads: its Chromium is absent whatever this computer has.
+  const empty = temp('nobrowsers');
+  try {
+    const result = spawnSync(process.execPath, [cli, 'doctor'], { encoding: 'utf8', env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: empty } });
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.match(result.stdout, /Browser: Playwright's Chromium is not installed/);
+  } finally {
+    fs.rmSync(empty, { recursive: true, force: true });
+  }
+});
+
 test('a build says so when videos are wanted and the last run recorded none', async () => {
   const dir = temp('norecording');
   try {
