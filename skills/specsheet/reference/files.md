@@ -2,10 +2,11 @@
 
 ```
 handoff/HELP-12/
-  specsheet.config.json     the setup the user confirmed
-  requirements.json     the requirements the user approved
-  scenarios/            the scenario files you write
-  out/                  everything the program produces
+  specsheet.config.json   the setup the user confirmed
+  requirements.json       the requirements the user approved
+  scenarios/              the scenario files you write
+  .gitignore              keeps out/ out of git
+  out/                    everything the program produces
 ```
 
 ## specsheet.config.json
@@ -35,7 +36,8 @@ handoff/HELP-12/
 | `viewports` | One or two screen sizes. Add `"mobile": true` for a phone, and `"scale": 2` for sharper screenshots |
 | `data` | `mock` or `real` |
 | `format` | `gherkin` or `checklist`: which one appears in the ticket text |
-| `videos` | `flow` (one walkthrough video per flow, the default), `scenario` (one per scenario) or `none` |
+| `videos` | `flow` (one walkthrough video per flow, the default), `scenario` (one per scenario) or `none`. With `none` nothing is recorded, so choosing videos later needs a new run |
+| `browser` | Optional. `chromium` (the default: the browser Playwright downloads), or `chrome` or `msedge` to use one already on the computer, for when that download is blocked |
 | `warnAt` | Optional. The number of screens or scenarios above which the size check warns. Defaults to 20 |
 | `pace` | Optional. The shortest pause after each step in milliseconds, for the videos. Defaults to 700. A step's caption always stays up long enough to read, up to four seconds |
 
@@ -58,7 +60,7 @@ design. Scenarios refer to requirements by `id` in their `covers` list.
 
 | File | What it is |
 |---|---|
-| `handoff.html` | The full handoff as one page, with a screenshot beside each step, copy buttons on every section, and a user flow that can be zoomed and clicked |
+| `handoff.html` | The full handoff as one page, with the steps of every scenario and a screenshot of each screen and state, copy buttons on every section, and a user flow that can be zoomed and clicked |
 | `flow.png`, `flow.svg` | The user flow |
 | `screens/` | One full-page screenshot per screen, state and screen size |
 | `videos/` | One walkthrough video per flow and screen size, or one per scenario, as set by `videos`. One per flow needs `ffmpeg`; without it the program writes one per scenario and says so |

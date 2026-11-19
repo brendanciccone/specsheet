@@ -32,21 +32,27 @@ That is the only install. You also need:
 - Optionally, a Jira connection, so Claude can read the ticket and post the handoff.
   Without it, paste the ticket in and attach the files yourself.
 
+Connections you added in claude.ai work when Claude Code is signed in with a claude.ai
+account. With Amazon Bedrock, Vertex AI or an API key they are not loaded: add each
+tool's MCP server yourself, as [Claude Code's MCP guide](https://code.claude.com/docs/en/mcp)
+describes. On a network that blocks downloads, see
+[Behind a firewall](docs/reference.md#behind-a-firewall).
+
 ## Use
 
 In the project that holds your design, ask Claude:
 
 > Hand off the contact form for HELP-12.
 
-For a design in Figma, Paper or Claude Design, run it in your product's codebase and
-include the link:
+For a design in Figma or Paper, run it in your product's codebase and include the link:
 
 > Hand off PROJ-123. The design is in Figma: \<link to the frames\>
 
 Claude first builds a working prototype from the design, with your real components, and
-asks you to check it against the design. In an empty folder it writes every screen from
-scratch, which costs more. A design made in Claude Code already runs, so this step is
-skipped.
+asks you to check it against the design. It adds new files on a branch, and leaves your
+existing code as it is. In an empty folder it writes every screen from scratch, which
+costs more. Nothing is built when the design already runs: one made in Claude Code, or a
+Claude Design export you can already click through.
 
 The skill takes it from there. The first time, it adds Specsheet to the project and
 downloads a browser, after asking you. Then it confirms the setup, lists the requirements

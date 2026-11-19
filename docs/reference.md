@@ -30,14 +30,15 @@ Claude runs these for you.
 | Command | What it does |
 |---|---|
 | `specsheet install-skill [--project]` | Copies the skill to `~/.claude/skills/`, or the project's `.claude/skills/` |
-| `specsheet doctor` | Says whether `ffmpeg` is installed, which the single walkthrough video needs |
+| `specsheet doctor [folder]` | Says whether this computer has what a run needs: a browser that starts, video recording, and `ffmpeg` for the single walkthrough video |
+| `specsheet version` | Prints the version |
 | `specsheet init <folder>` | Creates a handoff folder with starter files |
 | `specsheet check <folder>` | Counts what the handoff contains and warns if it is very large. Never blocks |
 | `specsheet run <folder> [--fast]` | Runs every scenario, then builds the handoff files. `--fast` skips the pauses and captions, for use while fixing findings |
 | `specsheet build <folder>` | Rebuilds the handoff files from the last run, without running anything again |
 
 `run` and `build` take `--videos flow` (one walkthrough per flow, the default),
-`--videos scenario` (one per scenario) or `--videos none`.
+`--videos scenario` (one per scenario) or `--videos none`. With `none`, nothing is recorded.
 
 `specsheet run` exits with 0 when every scenario passed, 1 when a step failed, and 2 when
 the run could not start.
@@ -91,6 +92,22 @@ Everything lands in `out/` inside the handoff folder.
 Joining scenarios into one video needs `ffmpeg`. Without it, the program writes one WebM
 video per scenario and says how to install it. After installing it, `specsheet build`
 remakes the videos without running anything again.
+
+## Behind a firewall
+
+A first run downloads three things. Each has a way round a blocked download:
+
+- **The program**, from GitHub. Your registry or mirror needs to reach it.
+- **Chromium**, from Playwright's servers. To use a browser already on the computer, set
+  `"browser": "chrome"` or `"msedge"` in `specsheet.config.json`. Playwright can also
+  download from a mirror: set `PLAYWRIGHT_DOWNLOAD_HOST`.
+- **Playwright's own ffmpeg**, which records the videos and comes with that Chromium
+  download. Without it, run `npx playwright install ffmpeg`, or set `"videos": "none"` to
+  run with no videos. Everything else in the handoff is the same.
+
+`specsheet doctor` says which of these the computer has, and what to do about the rest.
+The `ffmpeg` you install yourself is a different one: it only joins a flow's videos into
+one.
 
 ## Posting to Jira
 
