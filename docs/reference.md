@@ -43,9 +43,10 @@ Claude runs these for you.
 `specsheet run` exits with 0 when every scenario passed, 1 when a step failed, and 2 when
 the run could not start.
 
-`specsheet doctor` has its own two: 0 when this computer has what a run needs, and 1 when
-it does not, because the browser does not start, or videos are wanted and cannot be
-recorded.
+`specsheet doctor` has its own two: 0 when a run can start as things are, and 1 when it
+cannot, because the chosen browser does not start, or videos are wanted and cannot be
+recorded. It is still 1 when another browser on the computer would work: using that one
+takes a change to `specsheet.config.json`, which doctor names.
 
 ## What a scenario looks like
 

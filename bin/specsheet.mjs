@@ -35,8 +35,8 @@ Options
 Exit codes for "run"
   0  every scenario passed     1  at least one step failed     2  the run could not start
 Exit codes for "doctor"
-  0  this computer has what a run needs
-  1  it does not: the browser does not start, or videos are wanted and cannot be recorded
+  0  a run can start as things are
+  1  it cannot: the chosen browser does not start (even if another one would), or videos are wanted and cannot be recorded
 `;
 
 function parseArgs(argv) {
