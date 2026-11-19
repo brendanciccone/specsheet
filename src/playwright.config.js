@@ -4,7 +4,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from '@playwright/test';
-import { loadConfig } from './config.js';
+import { launchOptions, loadConfig } from './config.js';
 
 const dir = process.env.SPECSHEET_DIR;
 if (!dir) {
@@ -14,8 +14,12 @@ if (!dir) {
 const config = loadConfig(dir);
 const out = path.join(dir, 'out');
 const pace = Number(process.env.SPECSHEET_PACE ?? config.pace);
+// With no videos wanted, nothing is recorded. Recording needs Playwright's own ffmpeg,
+// so this also lets a run work where that download is blocked.
+const recording = (process.env.SPECSHEET_VIDEOS ?? config.videos) !== 'none';
 
 function video(viewport) {
+  if (!recording) return 'off';
   return {
     mode: 'on',
     size: { width: viewport.width, height: viewport.height },
@@ -49,6 +53,7 @@ export default defineConfig({
     screenshot: 'off',
     trace: 'off',
     // Slow every action down a little so the video can be followed.
+    ...launchOptions(config.browser),
     launchOptions: { slowMo: Math.round(pace / 3) },
   },
   projects: config.viewports.map((viewport) => ({

@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { build, hasFfmpeg } from '../src/build/index.js';
 import { formatSizeCheck, readStaticFlows, sizeCheck } from '../src/check.js';
 import { CONFIG_FILE, REQUIREMENTS_FILE, VIDEO_MODES, loadConfig } from '../src/config.js';
+import { browserReport, environmentProblem } from '../src/doctor.js';
 import { formatBytes, plural, readJson, viewportLabel, writeFile } from '../src/util.js';
 
 const HELP = `Specsheet: turn a ticket and a design into everything engineering needs.
@@ -19,13 +20,15 @@ Usage
   specsheet check <folder> [--screens N]                    Count what the handoff contains and warn if it is very large
   specsheet run <folder> [--fast] [--videos MODE]           Run every scenario, then build the handoff files
   specsheet build <folder> [--videos MODE]                  Rebuild the handoff files from the last run, without running again
-  specsheet doctor                                          Say whether this computer has what the videos need
+  specsheet doctor [folder]                                 Say whether this computer has what a run needs: a browser, recording, ffmpeg
   specsheet install-skill [--project]                       Give Claude the Specsheet skill, for you or for this project only
+  specsheet version                                         Print the version
 
 Options
   --fast        Skip the pauses and captions that make the videos watchable. Use while fixing findings.
   --videos MODE flow: one walkthrough video per flow (the default). scenario: one video per scenario.
-                none: no videos. Overrides "videos" in specsheet.config.json. Changing it only needs "build".
+                none: no videos, and nothing is recorded. Overrides "videos" in specsheet.config.json.
+                Switching between flow and scenario only needs "build".
   --screens N   For "check" before any scenario exists: the number of screens in the design.
   --project     For "install-skill": put the skill in this project's .claude folder, not your own.
 
@@ -57,6 +60,8 @@ function videoMode(flags) {
   if (!VIDEO_MODES.includes(flags.videos)) throw new Error(`--videos must be one of ${VIDEO_MODES.join(', ')}.`);
   return flags.videos;
 }
+
+const VERSION = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 
 const FFMPEG_MISSING =
   'ffmpeg is not installed. It is what joins the scenarios of a flow into one walkthrough video.\n' +
@@ -140,7 +145,9 @@ flow('Name of the flow', { states: { 'screen-name': ['ready'] } }, () => {
 });
 `,
   );
-  console.log(`Created ${path.relative(process.cwd(), dir) || '.'} with ${CONFIG_FILE}, ${REQUIREMENTS_FILE} and scenarios/example.scenario.js`);
+  // Everything a run writes can be made again, and it is large: keep it out of git.
+  writeFile(path.join(dir, '.gitignore'), 'out/\n');
+  console.log(`Created ${path.relative(process.cwd(), dir) || '.'} with ${CONFIG_FILE}, ${REQUIREMENTS_FILE}, scenarios/example.scenario.js and a .gitignore for out/`);
 }
 
 function printFiles(built) {
@@ -180,6 +187,7 @@ async function run(target, flags) {
   fs.rmSync(resultsFile, { force: true });
 
   const env = { ...process.env, SPECSHEET_DIR: dir };
+  if (videos) env.SPECSHEET_VIDEOS = videos;
   if (flags.fast) env.SPECSHEET_PACE = '0';
   spawnSync(process.execPath, [cli, 'test', '-c', playwrightConfig], { stdio: ['ignore', 'inherit', 'inherit'], env });
 
@@ -198,6 +206,12 @@ async function run(target, flags) {
     process.exit(2);
   }
 
+  const problem = environmentProblem(results, config);
+  if (problem) {
+    console.error(`\nThe run could not start. ${problem}`);
+    process.exit(2);
+  }
+
   const built = await build(dir, { videos, log: (message) => console.log(message) });
   console.log(`\n${built.findings}`);
   printFiles(built);
@@ -207,6 +221,10 @@ async function run(target, flags) {
 
 async function main() {
   const { command, target, flags } = parseArgs(process.argv.slice(2));
+  if (flags.version || command === 'version') {
+    console.log(VERSION);
+    return;
+  }
   if (!command || command === 'help' || flags.help) {
     console.log(HELP);
     return;
@@ -214,6 +232,10 @@ async function main() {
   if (command === 'init') return init(target, flags);
   if (command === 'install-skill') return installSkill(flags);
   if (command === 'doctor') {
+    const node = process.versions.node;
+    console.log(`Specsheet ${VERSION} on Node ${node}.${Number(node.split('.')[0]) < 22 ? ' Specsheet needs Node 22 or later.' : ''}`);
+    const browser = target ? loadConfig(resolveFolder(target)).browser : 'chromium';
+    for (const line of await browserReport(browser)) console.log(line);
     console.log(hasFfmpeg() ? 'ffmpeg is installed. A flow\'s scenarios can be joined into one walkthrough video.' : FFMPEG_MISSING);
     return;
   }
