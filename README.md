@@ -22,13 +22,31 @@ In Claude Code, run:
 /plugin install specsheet --marketplace brendanciccone/specsheet
 ```
 
-That is the only install. You also need [Node](https://nodejs.org) 20 or later.
+That is the only install. You also need:
+
+- [Node](https://nodejs.org) 22 or later.
+- [ffmpeg](https://ffmpeg.org), to join a flow's scenarios into one walkthrough video.
+  Without it, you get one video per scenario.
+- For a design in Figma or Paper, that tool's connection in Claude Code, so Claude can
+  read the frames.
+- Optionally, a Jira connection, so Claude can read the ticket and post the handoff.
+  Without it, paste the ticket in and attach the files yourself.
 
 ## Use
 
 In the project that holds your design, ask Claude:
 
 > Hand off the contact form for HELP-12.
+
+For a design in Figma, Paper or Claude Design, run it in your product's codebase and
+include the link:
+
+> Hand off PROJ-123. The design is in Figma: \<link to the frames\>
+
+Claude first builds a working prototype from the design, with your real components, and
+asks you to check it against the design. In an empty folder it writes every screen from
+scratch, which costs more. A design made in Claude Code already runs, so this step is
+skipped.
 
 The skill takes it from there. The first time, it adds Specsheet to the project and
 downloads a browser, after asking you. Then it confirms the setup, lists the requirements
@@ -37,9 +55,6 @@ for your approval, writes and runs the scenarios, and goes through what it found
 You get `handoff/HELP-12/out/handoff.html`: one file with the screenshots and video
 inside, and a copy button on every section. Claude can also post it to Jira as a
 comment, always after showing you a preview.
-
-A design made in Claude Code already runs in a browser. For Claude Design, Paper or
-Figma, Claude builds a prototype from it first.
 
 ## See it first
 

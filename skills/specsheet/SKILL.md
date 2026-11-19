@@ -35,7 +35,7 @@ holds the design, before step 1:
 
 1. Run `npx --no specsheet help`. If it prints the usage, the project is ready. Skip to
    the handoff folder below.
-2. Check `node --version` is 20 or later. If it is not, tell the user to install a newer
+2. Check `node --version` is 22 or later. If it is not, tell the user to install a newer
    Node from nodejs.org, and stop.
 3. Ask once: "Specsheet needs its program in this project and a browser to run the
    scenarios in. I'll run these two commands. OK?" and show them:
