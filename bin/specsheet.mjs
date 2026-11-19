@@ -34,6 +34,7 @@ Options
 
 Exit codes for "run"
   0  every scenario passed     1  at least one step failed     2  the run could not start
+"doctor" exits with 1 when a run could not start on this computer, and 0 otherwise.
 `;
 
 function parseArgs(argv) {
@@ -234,9 +235,13 @@ async function main() {
   if (command === 'doctor') {
     const node = process.versions.node;
     console.log(`Specsheet ${VERSION} on Node ${node}.${Number(node.split('.')[0]) < 22 ? ' Specsheet needs Node 22 or later.' : ''}`);
-    const browser = target ? loadConfig(resolveFolder(target)).browser : 'chromium';
-    for (const line of await browserReport(browser)) console.log(line);
+    // With a folder, check what that handoff is set up to use.
+    const config = target ? loadConfig(resolveFolder(target)) : null;
+    const report = await browserReport(config?.browser ?? 'chromium', { videos: (config?.videos ?? 'flow') !== 'none' });
+    for (const line of report.lines) console.log(line);
     console.log(hasFfmpeg() ? 'ffmpeg is installed. A flow\'s scenarios can be joined into one walkthrough video.' : FFMPEG_MISSING);
+    // A missing ffmpeg only changes how the videos come out. A browser that does not start stops a run.
+    if (!report.ready) process.exitCode = 1;
     return;
   }
   if (command === 'check') {

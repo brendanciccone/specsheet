@@ -41,7 +41,8 @@ Claude runs these for you.
 `--videos scenario` (one per scenario) or `--videos none`. With `none`, nothing is recorded.
 
 `specsheet run` exits with 0 when every scenario passed, 1 when a step failed, and 2 when
-the run could not start.
+the run could not start. `specsheet doctor` exits with 1 when a run could not start on this
+computer: the browser does not start, or videos are wanted and cannot be recorded.
 
 ## What a scenario looks like
 
