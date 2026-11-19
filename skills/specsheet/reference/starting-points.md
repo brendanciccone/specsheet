@@ -10,6 +10,25 @@ where the design was made. Tell the user the cost before you start an expensive 
 | Paper | The real HTML and CSS of each screen | Add behaviour, states and mock data | Medium |
 | Figma | A code translation of each frame, as a reference | Rebuild each screen as code | Highest |
 
+## Where the prototype goes
+
+When you build or change a prototype in a project that holds real product code:
+
+- **Work on a branch.** If the project is a git repository and you are on its main
+  branch, ask to create one first, for example `handoff/<ticket-key>`. Never commit or
+  push unless the user asks.
+- **Add new files and leave existing ones alone.** Ask the user where the prototype
+  should live. Offer `handoff/<TICKET-KEY>/prototype/` when it can run on its own, or a
+  new route or page inside the app when it has to use the app's components. Do not edit,
+  move or delete a file that was there before without a yes for that file.
+- **Reuse, do not modify.** Import the project's components and styles as they are. If a
+  component cannot do what the design needs, say so. That is a finding for the designer
+  and engineering, not something to patch.
+- **Say what you added.** When the prototype is ready for review, list the new files.
+
+A design made in Claude Code is different. The prototype is the user's own work, on the
+branch they are on, and you change it only to fix what the user agrees is wrong.
+
 ## Claude Code
 
 The design is already a prototype.

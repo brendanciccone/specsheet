@@ -81,6 +81,8 @@ the handoff is built from it.
    user: it usually means the control has no accessible name.
 6. **One behaviour per scenario, three to seven steps.** Start each scenario from a
    "Given" that navigates to its starting screen, so scenarios do not depend on each other.
+   Word that opening step exactly the same in every scenario that shares it. The handoff
+   then states it once, as a `Background`, instead of repeating it.
 7. **Force states with the network, not by editing the prototype.** Use `page.route` to
    return an empty list, an error or a slow response.
 8. **Write step titles in the user's words.** "When I pay with a card the bank declines",
@@ -90,12 +92,31 @@ the handoff is built from it.
    screen and state appears, in every scenario.
 10. **Do not take screenshots or record anything yourself.** The program does both.
 
+## Screens behind a sign-in
+
+Before you write a scenario for a screen that needs a signed-in user, ask how the
+prototype handles signing in. In order of preference:
+
+1. **The prototype needs no sign-in,** or has a mock user built in. Nothing to do.
+2. **Fake the session with the network.** Use `page.route` to answer the request the app
+   makes to find out who is signed in, the same way rule 7 forces other states.
+3. **Sign in as a test account** in an opening step, "Given I am signed in as a test
+   user", worded the same in every scenario. Read the name and password from environment
+   variables the user sets in their own terminal, for example
+   `process.env.SPECSHEET_USER` and `process.env.SPECSHEET_PASSWORD`.
+
+Never write a password, token or cookie into a scenario file, `specsheet.config.json` or
+the conversation, and never ask the user to paste one. A real account's data appears in
+the screenshots and videos, so treat it as real data: set `"data": "real"` and give the
+warning that goes with it.
+
 ## How screenshots are chosen
 
 The program takes a screenshot after every step. When several steps in a row land on the
 same screen and state, the handoff shows the one taken after the last of them, when the
 page has settled and the checks have passed. So a "When" followed by its "Then" share one
-screenshot, shown beside the "Then".
+screenshot, shown beside the "Then". The handoff page shows each screen and state once: a
+later step that lands on one shown earlier links back to that picture.
 
 ## Screen sizes
 

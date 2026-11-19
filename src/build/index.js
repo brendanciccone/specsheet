@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { loadConfig, loadRequirements } from '../config.js';
+import { launchOptions, loadConfig, loadRequirements } from '../config.js';
 import { readStaticFlows } from '../check.js';
 import { fingerprint, readJson, slug, writeFile } from '../util.js';
 import { featureText } from './gherkin.js';
@@ -112,9 +112,9 @@ function fileNames() {
   };
 }
 
-async function renderPng(svg, file, width) {
+async function renderPng(svg, file, width, browserName) {
   const { chromium } = await import('@playwright/test');
-  const browser = await chromium.launch();
+  const browser = await chromium.launch(launchOptions(browserName));
   try {
     const page = await browser.newPage({ viewport: { width: Math.ceil(width), height: 600 }, deviceScaleFactor: 2 });
     await page.setContent(`<body style="margin:0;background:#fff">${svg}</body>`);
@@ -221,6 +221,10 @@ export async function build(dir, { png = true, videos, log = () => {} } = {}) {
   if (videoMode !== 'none') {
     const videoName = fileNames();
     const useFfmpeg = hasFfmpeg();
+    const scenarios = model.flows.flatMap((flow) => flow.scenarios);
+    if (scenarios.length && !scenarios.some((scenario) => scenario.video && fs.existsSync(scenario.video))) {
+      log('The last run recorded no video, so there are no videos. Run again with videos on to record them.');
+    }
     if (videoMode === 'flow' && !useFfmpeg) {
       log('ffmpeg is not installed, so the scenarios could not be joined into one video per flow. Wrote one video per scenario.');
     }
@@ -293,7 +297,7 @@ export async function build(dir, { png = true, videos, log = () => {} } = {}) {
       const pngFile = path.join(out, 'flow.png');
       const width = Number(/width="(\d+(?:\.\d+)?)"/.exec(svg)?.[1] ?? 1200);
       try {
-        await renderPng(svg, pngFile, width);
+        await renderPng(svg, pngFile, width, config.browser);
         add(pngFile, 'User flow', 'flow');
         flowImage = `data:image/png;base64,${fs.readFileSync(pngFile).toString('base64')}`;
       } catch (error) {

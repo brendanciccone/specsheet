@@ -16,3 +16,13 @@ test('the plugin, the npm package and its lockfile carry the same name and versi
   assert.equal(plugin.name, pkg.name);
   assert.deepEqual(marketplace.plugins.map((entry) => entry.name), [pkg.name]);
 });
+
+test('the skill asks for a program version that exists', () => {
+  const skill = fs.readFileSync(new URL('../skills/specsheet/SKILL.md', import.meta.url), 'utf8');
+  const needed = /This skill needs Specsheet (\d+)\.(\d+)\.(\d+) or later/.exec(skill);
+  assert.ok(needed, 'SKILL.md names the program version it needs, under "Set up the project first"');
+  const current = read('package.json').version.split('.').map(Number);
+  const asked = needed.slice(1).map(Number);
+  const order = asked.map((part, index) => part - current[index]).find((difference) => difference !== 0) ?? 0;
+  assert.ok(order <= 0, `the skill asks for ${asked.join('.')}, which is later than this package (${current.join('.')})`);
+});

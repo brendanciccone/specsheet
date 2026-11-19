@@ -27,7 +27,9 @@ The repo has its own gate as well: `.npmrc` sets `min-release-age=7`, so npm 11.
 
 - `npm test`: the unit tests, which need no browser
 - `npm run example`: runs the example handoff end to end, in a browser. It writes
-  `examples/contact-form/handoff/HELP-12/out/`
+  `examples/contact-form/handoff/HELP-12/out/`. CI runs it too
+- `node bin/specsheet.mjs doctor`: says whether this computer has the browser, the video
+  recording and the `ffmpeg` a run needs
 - `node docs/logo/final.mjs`: redraws the logo PNG files and the logo sheets after a
   change to an SVG file in `assets/`
 - `node docs/screenshot/screenshot.mjs`: runs the example and redraws the picture at the
@@ -39,6 +41,13 @@ The repo has its own gate as well: `.npmrc` sets `min-release-age=7`, so npm 11.
 - Run `npm test` before opening a pull request, and `npm run example` after a change to
   the program.
 - After a change to the skill or the plugin files, run `claude plugin validate . --strict`.
+- A change under `skills/` or `.claude-plugin/` reaches people who already installed the
+  plugin only when the version changes: Claude Code treats the same version as up to
+  date. Raise the version in the same pull request, as in step 1 of Releasing. CI fails
+  if it is left as it was.
+- When the skill starts to rely on something new in the program, also raise the version
+  it names under "Set up the project first" in `skills/specsheet/SKILL.md`, so the skill
+  updates older installs.
 
 ## Releasing
 

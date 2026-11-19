@@ -9,6 +9,9 @@ export const JIRA_COMMENT_LIMIT = 32767;
 
 export const VIDEO_MODES = ['flow', 'scenario', 'none'];
 
+/** chromium is the browser Playwright downloads. chrome and msedge are ones already on the computer. */
+export const BROWSERS = ['chromium', 'chrome', 'msedge'];
+
 export const DEFAULTS = {
   title: '',
   ticket: null, // { key, url }
@@ -20,7 +23,8 @@ export const DEFAULTS = {
   format: 'gherkin', // 'gherkin' | 'checklist'
   warnAt: 20,
   commentLimit: JIRA_COMMENT_LIMIT,
-  videos: 'flow', // 'flow' (one walkthrough per flow) | 'scenario' (one per scenario) | 'none'
+  videos: 'flow', // 'flow' (one walkthrough per flow) | 'scenario' (one per scenario) | 'none' (nothing is recorded)
+  browser: 'chromium', // 'chromium' (Playwright's own download) | 'chrome' | 'msedge' (already installed)
   pace: 700, // shortest pause after each step, in milliseconds. Captions stay longer when they need it
   timeout: 30000,
   expectTimeout: 5000,
@@ -35,6 +39,11 @@ const SOURCES = {
 
 export function sourceLabel(source) {
   return SOURCES[source] ?? source ?? 'Not stated';
+}
+
+/** How Playwright starts the chosen browser: its own Chromium, or an installed Chrome or Edge. */
+export function launchOptions(browser) {
+  return browser && browser !== 'chromium' ? { channel: browser } : {};
 }
 
 export function loadConfig(dir) {
@@ -57,6 +66,9 @@ export function loadConfig(dir) {
   }
   if (!VIDEO_MODES.includes(config.videos)) {
     throw new Error(`${CONFIG_FILE}: "videos" must be one of ${VIDEO_MODES.join(', ')}.`);
+  }
+  if (!BROWSERS.includes(config.browser)) {
+    throw new Error(`${CONFIG_FILE}: "browser" must be one of ${BROWSERS.join(', ')}.`);
   }
   return config;
 }

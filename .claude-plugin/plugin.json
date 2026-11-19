@@ -1,6 +1,6 @@
 {
   "name": "specsheet",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Turn a ticket and a design into everything engineering needs: a user flow, walkthrough videos and acceptance criteria, each step run against the design.",
   "author": { "name": "Brendan Ciccone" },
   "homepage": "https://github.com/brendanciccone/specsheet#readme",
