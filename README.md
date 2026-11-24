@@ -44,6 +44,9 @@ In the project that holds your design, ask Claude:
 
 > Hand off the contact form for HELP-12.
 
+Or type `/specsheet:specsheet HELP-12`. Both start the same skill, in Claude Code in the
+terminal or in the desktop app's Code tab.
+
 For a design in Figma or Paper, run it in your product's codebase and include the link:
 
 > Hand off PROJ-123. The design is in Figma: \<link to the frames\>
