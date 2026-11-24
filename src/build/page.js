@@ -68,9 +68,8 @@ main { max-width: 880px; margin: 0 auto; padding: 36px 20px 96px; }
 .stats .is-warn { --tone: var(--warn); }
 .stats .is-good { --tone: var(--good); }
 .stats strong { color: var(--tone); }
-/* A light wash of the tile's colour, and a bar of it down the left edge. */
-.stats a { border-left: 4px solid var(--tone); border-color: color-mix(in srgb, var(--tone) 35%, var(--line)); border-left-color: var(--tone);
-  background: color-mix(in srgb, var(--tone) 7%, var(--page)); }
+/* A light wash of the tile's colour, inside a thin border of it. */
+.stats a { border: 1px solid color-mix(in srgb, var(--tone) 45%, var(--line)); background: color-mix(in srgb, var(--tone) 7%, var(--page)); }
 footer svg { width: 16px; height: 16px; margin-right: 6px; vertical-align: -3px; }
 h1 { margin: 0; font-size: 30px; line-height: 1.2; text-wrap: balance; }
 h2 { margin: 0; font-size: 21px; line-height: 1.3; }
