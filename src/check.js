@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadConfig, loadRequirements } from './config.js';
 import { featureText } from './build/gherkin.js';
-import { plural } from './util.js';
+import { openQuestion, plural } from './util.js';
 
 // A quoted string. Named groups, so the pattern can sit inside a larger one.
 const STRING = String.raw`(?<q>['"\`])(?<s>(?:\\.|(?!\k<q>)[^\\])*)\k<q>`;
@@ -140,15 +140,20 @@ const QUESTIONS_AT = 5;
  * What to put right in the open questions. Each is for a person to answer, so it has to
  * be a question, name who can answer it, and say what is built if nobody does.
  */
-export function questionNotes(questions) {
+export function questionNotes(list) {
   const notes = [];
+  const questions = list.map(openQuestion);
   const numbers = (test) =>
     questions
       .map((entry, index) => (test(entry) ? index + 1 : 0))
       .filter(Boolean)
       .join(', ');
   const lacks = [
-    [(entry) => !entry.question.includes('?'), 'not written as a question. If it is a decision you made, it goes in the "note" of the requirement it belongs to'],
+    [(entry) => !entry.question, 'has no "question" text, so the handoff leaves it out'],
+    [
+      (entry) => entry.question && !entry.question.endsWith('?'),
+      'does not end in a question mark. If it is a decision you made, it goes in the "note" of the requirement it belongs to',
+    ],
     [(entry) => !entry.who, 'missing "who": the person or role that can answer it'],
     [(entry) => !entry.default, 'missing "default": what is built if nobody answers'],
   ];

@@ -505,7 +505,10 @@ function labelSvg(labels, y, { from, to = null, room = 170, tone = '', maxLines 
   );
 }
 
-/** A "Yes" answer is green and a "No" answer is red. Any other answer is plain, so it is not taken for an action. */
+/**
+ * A "Yes" answer is green and a "No" answer is red. Any other answer is neutral: bold
+ * like those two, on a white box with a grey edge, so it is not taken for an action.
+ */
 function tone(answer) {
   if (/^(yes|true|ok)\b/i.test(answer.trim())) return 'yes';
   if (/^(no|false)\b/i.test(answer.trim())) return 'no';

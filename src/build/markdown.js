@@ -81,7 +81,7 @@ export function requirementsMarkdown(model) {
   }
   // What was decided where the ticket and the design did not say.
   const notes = model.requirements.filter((item) => item.note);
-  if (notes.length) lines.push('', 'Notes:', ...notes.map((item) => `- ${item.id}: ${item.note}`));
+  if (notes.length) lines.push('', 'Notes:', ...notes.map((item) => `- ${escapeMarkdown(item.id)}: ${escapeMarkdown(item.note)}`));
   return lines.join('\n');
 }
 
@@ -160,7 +160,7 @@ export function questionDetails(entry) {
 export function questionsMarkdown(model) {
   if (!model.openQuestions.length) return 'None.';
   return model.openQuestions
-    .map((entry, index) => [`${index + 1}. ${entry.question}`, ...questionDetails(entry).map((line) => `   - ${line}`)].join('\n'))
+    .map((entry, index) => [`${index + 1}. ${escapeMarkdown(entry.question)}`, ...questionDetails(entry).map((line) => `   - ${escapeMarkdown(line)}`)].join('\n'))
     .join('\n');
 }
 

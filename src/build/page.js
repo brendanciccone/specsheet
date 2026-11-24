@@ -225,7 +225,9 @@ const VIEW_SCRIPT = `
       toc.scrollTop += box.top - (toc.clientHeight - box.height) / 2;
     }
   }
-  function mark() {
+  // With again, the marked link is put back in view even when the marked part has not
+  // changed: after the window changes size, the row or the list is laid out afresh.
+  function mark(again) {
     var current = [];
     if (chosen && Math.abs(window.scrollY - landed) > 8) chosen = null;
     if (chosen) {
@@ -249,10 +251,13 @@ const VIEW_SCRIPT = `
       });
     }
     var same = current.length === marked.length && current.every(function (link, index) { return link === marked[index]; });
-    if (same) return;
+    var row = toc.offsetWidth >= document.documentElement.clientWidth;
+    if (same) {
+      if (again === true && current.length) keep(row ? current[0] : current[current.length - 1]);
+      return;
+    }
     marked.forEach(function (link) { link.classList.remove('current'); link.removeAttribute('aria-current'); });
     current.forEach(function (link) { link.classList.add('current'); });
-    var row = toc.offsetWidth >= document.documentElement.clientWidth;
     if (current.length) {
       current[current.length - 1].setAttribute('aria-current', 'location');
       keep(row ? current[0] : current[current.length - 1]);
@@ -268,9 +273,18 @@ const VIEW_SCRIPT = `
     waiting = true;
     requestAnimationFrame(function () { waiting = false; mark(); });
   }, { passive: true });
-  window.addEventListener('resize', mark);
+  window.addEventListener('resize', function () { mark(true); });
   // Opening or folding a scenario moves the page without scrolling it.
-  document.addEventListener('toggle', mark, true);
+  document.addEventListener('toggle', function () { mark(); }, true);
+  // The row of tabs shows no scrollbar. A mouse wheel turned over it moves it sideways,
+  // so a mouse reaches every tab, as a finger and the Tab key already do.
+  tabs.addEventListener('wheel', function (event) {
+    if (tabs.scrollWidth <= tabs.clientWidth || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+    var before = tabs.scrollLeft;
+    tabs.scrollLeft += event.deltaY;
+    // At either end the wheel goes back to scrolling the page.
+    if (tabs.scrollLeft !== before) event.preventDefault();
+  }, { passive: false });
   mark();
 
   // ----- Folded scenarios -----

@@ -186,17 +186,19 @@ function scrollToward(element, wait) {
   const top = 70;
   const bottom = window.innerHeight - 130;
   let block = 'center';
-  let inView = box.top >= top && box.bottom <= bottom;
+  let inView = box.top >= top && box.bottom <= bottom && box.right > 0 && box.left < window.innerWidth;
   if (box.height > bottom - top) {
     // Taller than the screen: it is in view once it fills half of it.
     inView = Math.min(box.bottom, window.innerHeight) - Math.max(box.top, 0) >= window.innerHeight * 0.5;
     block = 'start';
   }
   // Inside a panel that scrolls on its own, it also has to be in the part the panel shows.
+  // Sideways it only has to be within reach: a wide table is in view while part of it shows.
   for (let node = element.parentElement; inView && node && node !== document.documentElement; node = node.parentElement) {
-    if (!/auto|scroll/.test(getComputedStyle(node).overflowY)) continue;
+    const style = getComputedStyle(node);
     const frame = node.getBoundingClientRect();
-    if (box.top < frame.top - 1 || box.bottom > frame.bottom + 1) inView = false;
+    if (/auto|scroll/.test(style.overflowY) && (box.top < frame.top - 1 || box.bottom > frame.bottom + 1)) inView = false;
+    if (/auto|scroll/.test(style.overflowX) && (box.right <= frame.left || box.left >= frame.right)) inView = false;
   }
   if (inView) return false;
   return new Promise((resolve) => {
@@ -360,25 +362,54 @@ function humanize(page) {
   };
 }
 
-// Checks that pass with nothing on the page to look at.
-const UNSEEN = ['toBeHidden', 'toHaveScreenshot', 'toMatchAriaSnapshot'];
+// Checks that pass with nothing on the page to look at, as written and after `.not`.
+// Being in or out of the viewport is the very thing those two check, so the page is
+// left where it is for them.
+const UNSEEN = ['toBeHidden', 'toBeInViewport', 'toHaveScreenshot', 'toMatchAriaSnapshot'];
+const UNSEEN_NOT = ['toBeVisible', 'toBeAttached', 'toBeInViewport', 'toHaveScreenshot', 'toMatchAriaSnapshot'];
+
+/** How many checks have failed so far in this scenario. A soft check fails without throwing. */
+function failures() {
+  try {
+    return base.info().errors.length;
+  } catch {
+    return 0;
+  }
+}
+
+/** Scroll to what a check looked at, if it is there to be looked at. */
+async function look(locator) {
+  try {
+    const target = locator.first();
+    // Nothing matches, as after a check that something is gone: do not wait for it.
+    if (!(await target.count())) return;
+    await bringIntoView(target, 1500, true);
+  } catch {
+    // The page went away, or the check was the last thing on it.
+  }
+}
 
 /**
  * In a paced run, a check that passes scrolls to what it checked, so the video shows the
  * thing the step is about. Nothing else about the check changes, and a check that fails
  * is left exactly as it was.
  */
-function shown(matchers, locator) {
+function shown(matchers, locator, negated = false) {
   return new Proxy(matchers, {
     get(target, name) {
       const value = Reflect.get(target, name);
-      if (typeof value !== 'function' || typeof name !== 'string' || !name.startsWith('to') || UNSEEN.includes(name)) return value;
+      // `expect(x).not.toBeChecked()` is still about something on the page.
+      if (name === 'not' && value && typeof value === 'object') return shown(value, locator, !negated);
+      const unseen = negated ? UNSEEN_NOT : UNSEEN;
+      if (typeof value !== 'function' || typeof name !== 'string' || !name.startsWith('to') || unseen.includes(name)) return value;
       return (...args) => {
+        const before = failures();
         const outcome = value.apply(target, args);
         if (typeof outcome?.then !== 'function') return outcome;
-        if (name === 'toHaveCount' && args[0] === 0) return outcome;
+        if (name === 'toHaveCount' && (args[0] === 0) !== negated) return outcome;
         return outcome.then(async (result) => {
-          await bringIntoView(locator.first(), 400, true);
+          // A soft check that failed has been noted, not thrown. Leave the page as it is.
+          if (failures() === before) await look(locator);
           return result;
         });
       };

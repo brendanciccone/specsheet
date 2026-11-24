@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { openQuestion, readJson } from './util.js';
+import { openQuestion, readJson, words } from './util.js';
 
 export const CONFIG_FILE = 'specsheet.config.json';
 export const REQUIREMENTS_FILE = 'requirements.json';
@@ -110,19 +110,13 @@ export function loadRequirements(dir) {
     if (!['stated', 'inferred'].includes(source)) {
       throw new Error(`${REQUIREMENTS_FILE}: ${item.id} has source "${source}". Use "stated" or "inferred".`);
     }
-    const note = typeof item.note === 'string' && item.note.trim() ? item.note.trim() : null;
-    return { id: String(item.id), text: String(item.text), source, note };
+    return { id: String(item.id), text: String(item.text), source, note: words(item.note) };
   });
-  const openQuestions = (raw.openQuestions ?? []).map((item, index) => {
-    const entry = openQuestion(item);
-    if (!entry.question) {
-      throw new Error(`${REQUIREMENTS_FILE}: open question ${index + 1} needs a "question".`);
-    }
-    return entry;
-  });
+  // An entry with no question text is kept: `specsheet check` says so, and the handoff
+  // leaves it out. It is not worth stopping a run for.
   return {
     requirements,
-    openQuestions,
+    openQuestions: (raw.openQuestions ?? []).map(openQuestion),
     assumed: (raw.assumed ?? []).map(String),
   };
 }

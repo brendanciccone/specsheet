@@ -121,12 +121,16 @@ export function clock(seconds) {
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
 }
 
+/** A piece of text with the space around it taken off, or null when there is none. */
+export function words(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
 /**
  * An open question as the outputs use it. requirements.json gives either a line of text,
  * or the question with who can answer it and what is built if nobody does.
  */
 export function openQuestion(item) {
-  const words = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);
   if (item && typeof item === 'object') {
     return { question: words(item.question) ?? '', who: words(item.who), default: words(item.default) };
   }

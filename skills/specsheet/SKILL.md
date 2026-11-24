@@ -283,11 +283,12 @@ Everything else goes somewhere else:
 | The design disagrees with itself | To the designer, as a finding in your report (step 11). Say which one you built |
 
 Most handoffs end with none to three. With more than five, some are not questions for a
-person. Run `npx specsheet check handoff/<TICKET-KEY>`: it names the ones with no
-question mark, no `who` or no `default`.
+person.
 
-Write them to `requirements.json` and show the user the list. A question the user
-answers on the spot comes off it: the answer goes into the requirement or its `note`.
+Write them to `requirements.json`, then run `npx specsheet check handoff/<TICKET-KEY>`:
+it names the ones that do not end in a question mark or have no `who` or no `default`.
+Put those right, then show the user the list. A question the user answers on the spot
+comes off it: the answer goes into the requirement or its `note`.
 
 ### 10. Final run
 

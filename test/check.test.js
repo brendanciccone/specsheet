@@ -185,12 +185,22 @@ test('an open question has to be one a person can answer', () => {
   // A plain line is still read, and the check says what it lacks.
   write(['No loading state is designed.', { question: 'Is a receipt emailed?', who: 'Product' }]);
   const notes = sizeCheck(dir).notes;
-  assert.ok(notes.some((note) => /^Open question 1: not written as a question/.test(note)), notes.join('\n'));
+  assert.ok(notes.some((note) => /^Open question 1: does not end in a question mark/.test(note)), notes.join('\n'));
   assert.ok(notes.some((note) => /^Open question 1: missing "who"/.test(note)));
   assert.ok(notes.some((note) => /^Open questions 1, 2: missing "default"/.test(note)));
 
-  write([{ who: 'Product' }]);
-  assert.throws(() => sizeCheck(dir), /open question 1 needs a "question"/);
+  // A question mark in the middle is not enough.
+  const ask = (question) => questionNotes([{ question, who: 'Product', default: 'Free.' }]);
+  assert.match(ask('Should it be free? Say why.')[0], /does not end in a question mark/);
+  assert.deepEqual(ask('Should it be free?  '), []);
+
+  // An entry with no question text is noted, and does not stop the check.
+  write([{ who: 'Product', default: 'Free.' }, { question: null }]);
+  const empty = sizeCheck(dir).notes;
+  assert.ok(empty.some((note) => /^Open questions 1, 2: has no "question" text/.test(note)), empty.join('\n'));
+  assert.ok(!empty.some((note) => note.includes('question mark')));
+  // The check also takes entries as they are written in the file.
+  assert.match(questionNotes([{ default: 'x' }, null, 'Plain?'])[0], /^Open questions 1, 2: has no "question" text/);
 });
 
 test('many open questions are called out, with where the rest belong', () => {
