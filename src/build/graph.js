@@ -716,8 +716,8 @@ export function renderFlowSvg(model, viewportName = model.meta.viewports[0]?.nam
     .node-state { font: 600 16px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1a1a1a; }
     .start-pill { fill: #e9e9e9; }
     .start-text { font: 600 12px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #333333; }
-    .edge { fill: none; stroke: #a3a3a3; stroke-width: 2.25; stroke-linecap: round; stroke-linejoin: round; }
-    .edge-main { stroke: #6b6b6b; stroke-width: 3.5; }
+    .edge { fill: none; stroke: #a3a3a3; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+    .edge-main { stroke: #5c5c5c; }
     .port { fill: #a3a3a3; stroke: #ffffff; stroke-width: 2; }
     .edge-label-box { fill: #ffffff; stroke: #d9d9d9; }
     .edge-label { font: 500 13.5px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1a1a1a; }
@@ -774,9 +774,8 @@ export function renderFlowSvg(model, viewportName = model.meta.viewports[0]?.nam
     `<style>${style.replace(/^(\s*)\./gm, '$1.specsheet-flow .')}</style>` +
     `<defs><linearGradient id="specsheet-fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#fff"/></linearGradient>` +
     `<filter id="specsheet-lift" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.5" flood-color="#000" flood-opacity="0.08"/></filter>` +
-    // Solid triangles, sized to the line they finish. The line stops inside the head, so its blunt end never shows.
-    `<marker id="arrowhead" viewBox="0 0 16 14" refX="15" refY="7" markerWidth="16" markerHeight="14" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M1 1 L15 7 L1 13 z" fill="#a3a3a3" stroke="#a3a3a3" stroke-width="1.5" stroke-linejoin="round"/></marker>` +
-    `<marker id="arrowhead-main" viewBox="0 0 22 20" refX="21" refY="10" markerWidth="22" markerHeight="20" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M1.5 1.5 L20.5 10 L1.5 18.5 z" fill="#6b6b6b" stroke="#6b6b6b" stroke-width="2" stroke-linejoin="round"/></marker></defs>` +
+        `<marker id="arrowhead" viewBox="0 0 16 14" refX="15" refY="7" markerWidth="16" markerHeight="14" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M1 1 L15 7 L1 13 z" fill="#a3a3a3" stroke="#a3a3a3" stroke-width="1.5" stroke-linejoin="round"/></marker>` +
+    `<marker id="arrowhead-main" viewBox="0 0 16 14" refX="15" refY="7" markerWidth="16" markerHeight="14" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M1 1 L15 7 L1 13 z" fill="#5c5c5c" stroke="#5c5c5c" stroke-width="1.5" stroke-linejoin="round"/></marker></defs>` +
     `<rect class="bg" width="${width}" height="${height}"/>` +
     `<text x="${PAD}" y="${PAD + 10}" dominant-baseline="central" class="title">User flow: ${escapeHtml(model.meta.title)}</text>` +
     `<text x="${PAD}" y="${PAD + 34}" dominant-baseline="central" class="subtitle">${escapeHtml(subtitle)}</text>` +
