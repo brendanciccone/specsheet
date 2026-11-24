@@ -173,8 +173,14 @@ export function buildModel({ results, config, requirements, openQuestions, assum
     const covering = allScenarios.filter((scenario) => scenario.covers.includes(item.id));
     let status = 'not-covered';
     if (covering.length) status = covering.every((scenario) => scenario.status === 'passed') ? 'covered' : 'failing';
-    const named = (scenario) => `${scenario.number}. ${scenario.title}`;
-    return { ...item, status, scenarios: [...new Set(covering.map(named))], scenarioTitles: [...new Set(covering.map((scenario) => scenario.title))] };
+    // Each covering scenario once, however many screen sizes it ran at. Two flows can
+    // have a scenario of the same name, so the flow is part of what identifies it.
+    const proof = [];
+    for (const scenario of covering) {
+      if (proof.some((entry) => entry.flow === scenario.flow && entry.title === scenario.title)) continue;
+      proof.push({ flow: scenario.flow, title: scenario.title, label: `${scenario.number}. ${scenario.title}` });
+    }
+    return { ...item, status, scenarios: proof.map((entry) => entry.label), proof };
   });
 
   const findings = { failedSteps: [], unverified: [], missingStates: [], uncovered: [], unknownIds: [], noSteps: [] };

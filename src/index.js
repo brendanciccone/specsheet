@@ -207,7 +207,10 @@ function humanize(page) {
         if ((await this.inputValue()) !== '') await fill.call(this, '', options);
         // A long text is typed faster, so no field takes more than about two seconds.
         await this.pressSequentially(text, { delay: Math.max(6, Math.min(38, 1800 / text.length)) });
-        if ((await this.inputValue()) === text) return;
+        // The text has been typed. Check it only if the field is still there: a field
+        // that takes its last character and goes away, such as a one-time code, is done.
+        const now = await this.inputValue({ timeout: 800 }).catch(() => null);
+        if (now === null || now === text) return;
       }
     } catch {
       // Fall through to the plain fill, which waits for the field and reports any problem.
@@ -364,11 +367,14 @@ export const test = base.extend({
           if (card) {
             cards.delete(page);
             // A first step that opened no page would leave the card in its screenshot.
+            // Take away the card alone: the step may have put its own content beside it.
             if (!moved) {
               await page
                 .evaluate(() => {
+                  const holder = document.getElementById('specsheet-title-card');
+                  if (!holder) return;
+                  holder.remove();
                   document.documentElement.style.background = '';
-                  document.body.innerHTML = '';
                 })
                 .catch(() => {});
             }
@@ -468,10 +474,16 @@ export function scenario(title, options, body) {
         // A title card at the start of the video: the scenario's name, then straight on.
         // It is written into the empty page the scenario starts on, so it is what the
         // video shows until the first step's page replaces it, with nothing in between.
+        // Only an empty page is written into. A page that something has already opened
+        // is left alone, and that scenario has no card.
         const card = await page
           .evaluate((html) => {
+            if (location.href !== 'about:blank' || document.body.childElementCount) return false;
             document.documentElement.style.background = '#1a1a1a';
-            document.body.innerHTML = html;
+            const holder = document.createElement('div');
+            holder.id = 'specsheet-title-card';
+            holder.innerHTML = html;
+            document.body.append(holder);
             return true;
           }, titleCardHtml(title, current.count > 1 ? number : null))
           .catch(() => false);

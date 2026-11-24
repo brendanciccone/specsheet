@@ -100,7 +100,8 @@ test('counts a handoff and stays quiet below the threshold', () => {
     { requirements: 2, stated: 1, inferred: 1, flows: 1, scenarios: 3, steps: 3, screens: 3, states: 3, viewports: 1 },
   );
   assert.deepEqual(result.warnings, []);
-  assert.match(formatSizeCheck(result), /No warning/);
+  assert.match(formatSizeCheck(result), /No warning\. A split is recommended above 12 scenarios or 8 screens\.$/);
+  assert.match(formatSizeCheck(sizeCheck(handoffFolder(), { screens: 2 })), /or 8 requirements before scenarios are written\.$/);
 });
 
 test('recommends a split, without blocking, beyond the thresholds', () => {

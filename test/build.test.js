@@ -220,11 +220,83 @@ test('user flow: a decision is drawn once, with a branch per answer', () => {
   // The question sits below the state it is asked on, and above the state an answer leads to.
   assert.ok(bank.y > layout.positions.get('pay/ready').y && bank.y < layout.positions.get('pay/declined').y);
   // An answer that goes back is text, like any other way back.
-  assert.deepEqual(layout.decisions.find((decision) => decision.from === 'pay/help').branches.map((branch) => [branch.answer, branch.kind, branch.back]), [['Closed', 'back', 'ready']]);
+  assert.deepEqual(layout.decisions.find((decision) => decision.from === 'pay/help').branches.map((branch) => [branch.answer, branch.kind, branch.back]), [['Closed', 'back', '↩ ready']]);
 
   const svg = renderFlowSvg({ meta: { title: 'T', viewports: [viewport] }, flows: [flow] });
   assert.equal((svg.match(/class="decision-text">Does the bank accept the card\?</g) ?? []).length, 2);
   assert.match(svg, />No</);
+});
+
+test('user flow: answers that lead to the same state share one branch, and none is lost', () => {
+  const ask = (answer) => ({ decision: 'How do they pay?', answer });
+  const run = (title, steps, status = 'passed') => ({ ...scenario(title, [], steps, status), declaredStates: {} });
+  const raw = {
+    finishedAt: '2026-11-15T12:00:00.000Z',
+    errors: [],
+    scenarios: [
+      run('Card', [step('Given I am paying', 'pay', 'ready'), step('When I pay by card', 'done', 'ready', ask('Card'))]),
+      run('Cash', [step('Given I am paying', 'pay', 'ready'), step('When I pay in cash', 'done', 'ready', ask('Cash'))]),
+      // The same action and the same end, answered differently, is still two answers.
+      run('Voucher', [step('Given I am paying', 'pay', 'ready'), step('When I pay by card', 'done', 'ready', ask('Voucher'))]),
+    ],
+  };
+  const flow = buildModel({ results: raw, config, requirements: [], openQuestions: [] }).flows[0];
+  const graph = buildGraph(flow, 'Desktop');
+  assert.deepEqual(graph.edges.map((edge) => edge.decision.answer), ['Card', 'Cash', 'Voucher']);
+  const [decision] = layoutGraph(graph, viewport).decisions;
+  assert.deepEqual(decision.branches.map((branch) => branch.answer), ['Card / Cash / Voucher']);
+});
+
+test('user flow: an arrow that is not drawn says whether it goes back or further down', () => {
+  const run = (title, steps) => ({ ...scenario(title, [], steps.map(([text, screen, state]) => step(text, screen, state))), declaredStates: {} });
+  const raw = {
+    finishedAt: '2026-11-15T12:00:00.000Z',
+    errors: [],
+    scenarios: [
+      run('Step by step', [['Given I start', 'form', 'a'], ['When I fill it in', 'form', 'b'], ['When I confirm', 'form', 'c']]),
+      run('Straight there', [['Given I start', 'form', 'a'], ['When I skip ahead', 'form', 'c'], ['When I start again', 'form', 'a']]),
+    ],
+  };
+  const flow = buildModel({ results: raw, config, requirements: [], openQuestions: [] }).flows[0];
+  const layout = layoutGraph(buildGraph(flow, 'Desktop'), viewport);
+  // c is drawn below b, so b leads down to it. From c, a is back up.
+  assert.deepEqual(layout.chips.get('form/b'), [['↳ I confirm → c']]);
+  assert.deepEqual(layout.chips.get('form/c'), [['↩ I start again → a']]);
+});
+
+test('user flow: a failing scenario is not the main path, and a deep question fits its lane', () => {
+  const run = (title, steps, status = 'passed') => ({ ...scenario(title, [], steps, status), declaredStates: {} });
+  const ask = (answer) => ({ decision: 'Is the very long question that needs the whole width answered here?', answer });
+  const raw = {
+    finishedAt: '2026-11-15T12:00:00.000Z',
+    errors: [],
+    scenarios: [
+      // Every step passes, but the scenario failed after its last step.
+      run('Long but broken', [step('Given I start', 'one', 'a'), step('When I go on', 'two', 'a'), step('When I go further', 'three', 'a')], 'failed'),
+      run('Short and fine', [step('Given I start', 'one', 'a'), step('When I open it', 'one', 'b'), step('When I open more', 'one', 'c'), step('When I choose', 'one', 'd', ask('Yes'))]),
+    ],
+  };
+  const flow = buildModel({ results: raw, config, requirements: [], openQuestions: [] }).flows[0];
+  const graph = buildGraph(flow, 'Desktop');
+  assert.deepEqual(graph.mainPath, ['one/a', 'one/b', 'one/c', 'one/d']);
+
+  const layout = layoutGraph(graph, viewport);
+  const [decision] = layout.decisions;
+  const lane = layout.bands.find((band) => band.screen === 'one');
+  const widest = Math.max(...decision.lines.map((line) => textWidth(line, 15, true)));
+  assert.ok(decision.x + 25 + widest <= lane.x + lane.width, 'the question ends inside its lane');
+});
+
+test('a requirement links to the scenario that proves it, in the right flow', async () => {
+  const { renderPage } = await import('../src/build/page.js');
+  const inFlow = (flow, covers) => ({ ...scenario('Submit <b>', covers, [step('Given I start', flow, 'ready')]), flow, declaredStates: {} });
+  const raw = { finishedAt: '2026-11-15T12:00:00.000Z', errors: [], scenarios: [inFlow('Sign up', ['R<1>']), inFlow('Sign in', ['R2'])] };
+  const built = buildModel({ results: raw, config, requirements: [{ id: 'R2', text: 'Sign in', source: 'stated' }], openQuestions: [] });
+  assert.deepEqual(built.requirements[0].proof, [{ flow: 'Sign in', title: 'Submit <b>', label: '1. Submit <b>' }]);
+  const html = renderPage(built, { flowImage: null });
+  assert.match(html, /<td><a href="#flow-1-scenario-0">1\. Submit &lt;b&gt;<\/a><\/td>/);
+  // The ids a scenario covers are text, not markup.
+  assert.match(html, /<span class="scenario-brief">R&lt;1&gt; · /);
 });
 
 test('user flow: a preview has the shape of its own screenshot', async () => {
@@ -290,14 +362,30 @@ test('user flow: the words of a label are centred in a box that fits them', () =
   }
 });
 
-test('user flow: each flow gets its own drawing', () => {
-  const first = branching();
-  const second = { ...branching(), name: 'Returns' };
-  const svg = renderFlowSvg({ meta: { title: 'T', viewports: [viewport] }, flows: [first, second] });
-  assert.match(svg, /class="flow-name">Checkout</);
-  assert.match(svg, /class="flow-name">Returns</);
-  const ids = svg.match(/clipPath id="[^"]+"/g) ?? [];
-  assert.equal(new Set(ids).size, ids.length);
+test('user flow: each flow gets its own drawing', async () => {
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specsheet-flows-'));
+  try {
+    // The smallest PNG there is, so each flow has a picture and so a clip path.
+    const shot = path.join(dir, 'shot.png');
+    fs.writeFileSync(shot, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64'));
+    const withShot = (name) => {
+      const flow = { ...branching(), name };
+      const state = flow.screens[0].states[0];
+      state.shots = [{ file: shot, viewport, verified: true }];
+      return flow;
+    };
+    const svg = renderFlowSvg({ meta: { title: 'T', viewports: [viewport] }, flows: [withShot('Checkout'), withShot('Returns')] });
+    assert.match(svg, /class="flow-name">Checkout</);
+    assert.match(svg, /class="flow-name">Returns</);
+    const ids = svg.match(/clipPath id="[^"]+"/g) ?? [];
+    assert.equal(ids.length, 2, 'one preview in each flow');
+    assert.equal(new Set(ids).size, ids.length);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('the page folds passing scenarios once there are many, and lists them in the contents', async () => {
@@ -342,7 +430,7 @@ test('the video: a caption leads its step, and screenshot moments are cut', asyn
   assert.equal(leadTime('When I send a message with my name, email and text', 700), 350 + 22 * 50);
   assert.equal(leadTime('x'.repeat(300), 700), 1800);
   // Two screenshots close together become one cut. Steps with no full-page screenshot have none.
-  assert.deepEqual(shotCuts([{ shotAt: [4000, 4300] }, {}, { shotAt: [4600, 4900] }, { shotAt: [9000, 9200] }]), [[3.8, 5.35], [8.8, 9.65]]);
+  assert.deepEqual(shotCuts([{ shotAt: [4000, 4300] }, {}, { shotAt: [4600, 4900] }, { shotAt: [9000, 9200] }]), [[0, 0.12], [3.8, 5.35], [8.8, 9.65]]);
   assert.deepEqual(shotCuts([]), []);
 });
 

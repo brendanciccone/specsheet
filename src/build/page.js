@@ -194,14 +194,31 @@ const VIEW_SCRIPT = `
   }
   window.addEventListener('hashchange', follow);
   follow();
+  // Clicking a link to where the page already points changes nothing in the address,
+  // so open its target here as well.
+  document.addEventListener('click', function (event) {
+    var link = event.target.closest('a[href^="#"]');
+    if (!link || link.getAttribute('href') !== location.hash) return;
+    follow();
+  });
   document.addEventListener('click', function (event) {
     var button = event.target.closest('button[data-fold]');
     if (!button) return;
     var open = button.dataset.fold === 'open';
     button.closest('section').querySelectorAll('article.scenario > details').forEach(function (fold) { fold.open = open; });
   });
+  // Everything is opened for printing, and put back as it was afterwards.
+  var folded = [];
   window.addEventListener('beforeprint', function () {
-    document.querySelectorAll('details').forEach(function (fold) { fold.open = true; });
+    folded = [];
+    document.querySelectorAll('details').forEach(function (fold) {
+      if (!fold.open) folded.push(fold);
+      fold.open = true;
+    });
+  });
+  window.addEventListener('afterprint', function () {
+    folded.forEach(function (fold) { fold.open = false; });
+    folded = [];
   });
 
   // ----- Contents: mark the part of the page being read -----
@@ -250,8 +267,11 @@ const VIEW_SCRIPT = `
     else if (event.target === box || event.target.closest('[data-lightbox="close"]')) closeBox();
   });
   document.addEventListener('keydown', function (event) {
-    if (event.key === 'Escape' && box.classList.contains('open')) closeBox();
+    if (event.key !== 'Escape') return;
+    if (box.classList.contains('open')) closeBox();
+    else if (closeFull) closeFull();
   });
+  var closeFull = null;
   document.addEventListener('click', function (event) {
     var image = event.target.closest('article.scenario figure img');
     if (!image) return;
@@ -413,7 +433,14 @@ const VIEW_SCRIPT = `
   });
   function release(event) {
     delete pointers[event.pointerId];
-    if (fingers().length < 2) pinch = null;
+    var left = fingers();
+    if (pinch && left.length === 1) {
+      // The finger that stays carries on moving the drawing. Lifting it is not a tap.
+      pinch = null;
+      drag = { x: left[0].x, y: left[0].y, startX: view.x, startY: view.y, moved: true, target: stage };
+      return;
+    }
+    if (left.length < 2) pinch = null;
     if (!drag) return;
     var finished = drag;
     drag = null;
@@ -450,9 +477,7 @@ const VIEW_SCRIPT = `
     else return;
     event.preventDefault();
   });
-  document.addEventListener('keydown', function (event) {
-    if (event.key === 'Escape' && viewer.classList.contains('full') && !box.classList.contains('open')) setFull(false);
-  });
+  closeFull = function () { if (viewer.classList.contains('full')) setFull(false); };
   window.addEventListener('resize', function () { if (!touched) start(); });
   start();
 })();
@@ -695,7 +720,7 @@ function scenarioHtml(scenario, key, manyViewports, flowKey, shown, open) {
 
   const passed = scenario.status === 'passed';
   const brief = [
-    scenario.covers.join(', '),
+    escapeHtml(scenario.covers.join(', ')),
     `<span class="${passed ? 'good' : 'bad'}">${passed ? 'Passes' : 'Fails'}</span>`,
   ]
     .filter(Boolean)
@@ -729,7 +754,8 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
   const scenarioIds = new Map();
   model.flows.forEach((flow, flowIndex) => {
     flow.scenarios.forEach((scenario, index) => {
-      if (!scenarioIds.has(scenario.title)) scenarioIds.set(scenario.title, `flow-${flowIndex}-scenario-${index}`);
+      const id = `${flow.name}\n${scenario.title}`;
+      if (!scenarioIds.has(id)) scenarioIds.set(id, `flow-${flowIndex}-scenario-${index}`);
     });
   });
 
@@ -753,7 +779,7 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
       (item) =>
         `<tr><td>${escapeHtml(item.id)}</td><td>${escapeHtml(item.text)}</td><td>${escapeHtml(requirementSource(item.source))}</td>` +
         `<td class="${statusClass(item.status)}">${escapeHtml(requirementStatus(item.status))}</td>` +
-        `<td>${item.scenarioTitles.map((title, index) => `<a href="#${scenarioIds.get(title)}">${escapeHtml(item.scenarios[index])}</a>`).join('; ') || 'None'}</td></tr>`,
+        `<td>${item.proof.map((entry) => `<a href="#${scenarioIds.get(`${entry.flow}\n${entry.title}`)}">${escapeHtml(entry.label)}</a>`).join('; ') || 'None'}</td></tr>`,
     )
     .join('');
   markdown.requirements = `## Requirements\n\n${requirementsMarkdown(model)}`;
@@ -941,7 +967,7 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
 
   // The numbers a reader wants first, each a link to where it is explained.
   const { counts } = model;
-  const firstFlow = toc[0]?.id ?? 'summary';
+  const firstFlow = toc[0]?.id ?? 'requirements';
   const failing = toc.flatMap((entry) => entry.items).find((item) => !item.passed);
   const tiles = [
     [`${counts.scenariosPassed} of ${counts.scenarios}`, counts.scenarios === 1 ? 'scenario passes' : 'scenarios pass', failing?.id ?? firstFlow, model.passed ? 'good' : 'bad'],

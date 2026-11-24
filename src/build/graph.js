@@ -49,7 +49,8 @@ export function buildGraph(flow, viewportName) {
     let action = null;
     let choice = null;
     let used = false;
-    let complete = true;
+    // A scenario can fail after its last step, with every step passing. It is still not a path to follow.
+    let complete = scenario.status === undefined || scenario.status === 'passed';
     const path = { nodes: [], edges: [] };
     for (const step of scenario.steps) {
       if (!step.groupPassed) {
@@ -70,7 +71,7 @@ export function buildGraph(flow, viewportName) {
         const label = action && !used ? action : action ? AUTO : stripKeyword(step.title);
         const decision = action && !used ? choice : null;
         used = true;
-        const key = `${previous.id}→${node.id}→${label}`;
+        const key = `${previous.id}→${node.id}→${label}${decision ? `→${decision.question}→${decision.answer}` : ''}`;
         if (!edges.has(key)) edges.set(key, { from: previous.id, to: node.id, label, main: false, decision });
         path.edges.push(key);
       }
@@ -172,7 +173,7 @@ function nodeSizes(graph, viewport) {
     const image = node.shot ? pngSize(node.shot) : null;
     const full = inner * (image ? image.height / image.width : screen);
     // A real screenshot keeps its shape even when it is short. Only an empty box has a least height.
-    const thumb = Math.round(Math.min(limit, Math.max(image ? 56 : THUMB.min, full)));
+    const thumb = Math.round(Math.min(limit, Math.max(image ? 24 : THUMB.min, full)));
     sizes.set(node.id, { width, thumb, height: thumb + NODE.text, cut: full > limit + 1 });
   }
   return { width, sizes };
@@ -196,12 +197,16 @@ export function layoutGraph(graph, viewport) {
   // Arrows between the same two states are drawn once, with every action on the label.
   const pairs = new Map();
   for (const edge of graph.edges) {
-    const key = `${edge.from}→${edge.to}`;
-    if (!pairs.has(key)) pairs.set(key, { from: edge.from, to: edge.to, labels: [], main: false, decision: null });
+    // A decision's arrows are kept apart from plain ones, and one question from another.
+    const key = `${edge.from}→${edge.to}${edge.decision ? `→${edge.decision.question}` : ''}`;
+    if (!pairs.has(key)) {
+      const decision = edge.decision ? { question: edge.decision.question, answers: [] } : null;
+      pairs.set(key, { from: edge.from, to: edge.to, labels: [], main: false, decision });
+    }
     const pair = pairs.get(key);
     if (!pair.labels.includes(edge.label)) pair.labels.push(edge.label);
+    if (edge.decision && !pair.decision.answers.includes(edge.decision.answer)) pair.decision.answers.push(edge.decision.answer);
     pair.main ||= edge.main;
-    pair.decision ??= edge.decision ?? null;
   }
   const leavingFrom = (id) => [...pairs.values()].filter((pair) => pair.from === id);
   const backText = (pair) => {
@@ -221,13 +226,16 @@ export function layoutGraph(graph, viewport) {
     const members = graph.nodes.filter((node) => node.screen === screen);
     const shown = members.filter((node) => !node.missing);
     const rows = [];
+    const notes = [];
     const visit = (node, level) => {
       depth.set(node.id, level);
       rows.push({ kind: 'node', node });
       const out = leavingFrom(node.id).sort((a, b) => Number(b.main) - Number(a.main) || byId.get(a.to).order - byId.get(b.to).order);
       // Claim the children first, so a state is drawn under the nearest state that leads to it.
-      const mine = out.filter((pair) => laneOf(pair.to) === index && !depth.has(pair.to));
-      for (const pair of mine) {
+      const mine = [];
+      for (const pair of out) {
+        if (laneOf(pair.to) !== index || depth.has(pair.to)) continue;
+        mine.push(pair);
         depth.set(pair.to, level + 1);
         parent.set(pair.to, node.id);
       }
@@ -239,7 +247,7 @@ export function layoutGraph(graph, viewport) {
         } else if (laneOf(pair.to) > index) {
           forward.push(pair);
         } else {
-          for (const label of pair.labels) chips.get(node.id).push(wrap(`↩ ${label} → ${backText(pair)}`, chipRoom, TEXT.chip));
+          for (const label of pair.labels) notes.push({ from: node.id, to: pair.to, text: `${label} → ${backText(pair)}` });
         }
       }
       // Decisions come last, so the line down to the other states does not pass through them.
@@ -250,7 +258,7 @@ export function layoutGraph(graph, viewport) {
         decisions.push(decision);
         rows.push({ kind: 'decision', decision });
         for (const pair of answers) {
-          const branch = { pair, answer: pair.decision.answer, kind: 'state' };
+          const branch = { pair, answer: pair.decision.answers.join(' / '), kind: 'state' };
           decision.branches.push(branch);
           if (mine.includes(pair)) {
             visit(byId.get(pair.to), level + 1);
@@ -258,7 +266,7 @@ export function layoutGraph(graph, viewport) {
           }
           branch.kind = laneOf(pair.to) > index ? 'forward' : 'back';
           if (branch.kind === 'forward') forward.push(pair);
-          else branch.back = backText(pair);
+          else notes.push({ branch, to: pair.to, from: node.id, text: backText(pair) });
           pair.branch = branch;
           rows.push({ kind: 'branch', branch });
         }
@@ -273,8 +281,18 @@ export function layoutGraph(graph, viewport) {
       depth.set(node.id, Math.min(1, deepest));
       rows.push({ kind: 'node', node });
     }
-    const asks = rows.some((row) => row.kind === 'decision');
-    return { screen, index, rows, width: Math.max(boxWidth + deepest * INDENT, asks ? DECISION.width : 0) };
+    // An arrow that is not drawn is a note. It goes back, unless the state it leads to
+    // sits further down the same lane, where "back" would be wrong.
+    const rowOf = (id) => rows.findIndex((row) => row.kind === 'node' && row.node.id === id);
+    for (const note of notes) {
+      const down = laneOf(note.to) === index && rowOf(note.to) > rowOf(note.from);
+      const mark = down ? '↳' : '↩';
+      if (note.branch) note.branch.back = `${mark} ${note.text}`;
+      else chips.get(note.from).push(wrap(`${mark} ${note.text}`, chipRoom, TEXT.chip));
+    }
+    // The lane is as wide as whatever reaches furthest right: a state, or a question.
+    const asked = rows.filter((row) => row.kind === 'decision').map((row) => depth.get(row.decision.from) * INDENT + DECISION.width);
+    return { screen, index, rows, width: Math.max(boxWidth + deepest * INDENT, ...asked) };
   });
 
   // Arrows that pass over a whole screen travel above the lanes, each at its own height.
@@ -556,7 +574,7 @@ function edgesSvg(layout, marker) {
         const answer = wrap(branch.answer, room, TEXT.label, { bold: true });
         const end = x + 12 + Math.max(...answer.map((line) => textWidth(line, TEXT.label, true))) + 2 * LABEL.pad;
         draw([[x, y + r], [x, branch.y], [end + 4, branch.y]], pair.main, false);
-        const back = wrap(`↩ ${branch.back}`, 200, TEXT.chip, { maxLines: 1 })[0];
+        const back = wrap(branch.back, 200, TEXT.chip, { maxLines: 1 })[0];
         labels.push(labelSvg([branch.answer], branch.y, { from: x + 12, room, tone: tone(branch.answer), trail: back }));
       }
     }
@@ -724,7 +742,7 @@ export function renderFlowSvg(model, viewportName = model.meta.viewports[0]?.nam
   if (drawings.some((item) => item.layout.decisions.length)) {
     legendItems.push(['<path d="M11 -8 L19 0 L11 8 L3 0 Z" class="decision"/>', 'A decision, with one branch per answer', 30]);
   }
-  if (hasBack) legendItems.push(['<text x="0" y="0" dominant-baseline="central" class="chip">↩</text>', 'Goes back to a state already shown', 16]);
+  if (hasBack) legendItems.push(['<text x="0" y="0" dominant-baseline="central" class="chip">↩</text>', 'Leads to a state shown elsewhere', 16]);
   let legendX = PAD;
   const legend = legendItems
     .map(([mark, text, offset]) => {

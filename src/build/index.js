@@ -35,6 +35,12 @@ export function shotCuts(steps) {
     if (last && from <= last[1]) last[1] = Math.max(last[1], to);
     else cuts.push([from, to]);
   }
+  // A paced recording opens on an empty white page for a frame or two, before the
+  // scenario's title card is up. Take that off the front as well.
+  if (cuts.length) {
+    if (cuts[0][0] <= 0.12) cuts[0][0] = 0;
+    else cuts.unshift([0, 0.12]);
+  }
   return cuts.map(([from, to]) => [Number(from.toFixed(2)), Number(to.toFixed(2))]);
 }
 

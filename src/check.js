@@ -225,8 +225,8 @@ export function formatSizeCheck(result) {
   for (const note of result.notes) lines.push(`  Note: ${note}`);
   if (!result.warnings.length) {
     lines.push(
-      `  No warning. A split is recommended above ${result.limits.scenarios} scenarios, ` +
-        `${result.limits.screens} screens or ${result.limits.requirements} requirements.`,
+      `  No warning. A split is recommended above ${result.limits.scenarios} scenarios or ${result.limits.screens} screens` +
+        (result.early ? `, or ${result.limits.requirements} requirements before scenarios are written.` : '.'),
     );
   }
   return lines.join('\n');

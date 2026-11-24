@@ -33,7 +33,7 @@ Claude runs these for you.
 | `specsheet doctor [folder]` | Says whether this computer has what a run needs: a browser that starts, video recording, and `ffmpeg` for the single walkthrough video |
 | `specsheet version` | Prints the version |
 | `specsheet init <folder>` | Creates a handoff folder with starter files |
-| `specsheet check <folder>` | Counts what the handoff contains. Above 12 scenarios, 8 screens or 8 requirements it recommends splitting the story and says where. Never blocks |
+| `specsheet check <folder>` | Counts what the handoff contains. Above 12 scenarios or 8 screens, or 8 requirements before any scenario is written, it recommends splitting the story and says where. Never blocks |
 | `specsheet run <folder> [--fast]` | Runs every scenario, then builds the handoff files. `--fast` skips the pauses and captions, for use while fixing findings |
 | `specsheet build <folder>` | Rebuilds the handoff files from the last run, without running anything again |
 
