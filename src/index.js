@@ -297,12 +297,20 @@ async function capture(page, testInfo, record) {
   }
 }
 
+// When each page was made, which is when its recording starts. Screenshot times are
+// counted from here, so they line up with the video even when a hook uses the page
+// before the scenario's own steps begin.
+const openedAt = new WeakMap();
+
 export const test = base.extend({
+  page: async ({ page }, use) => {
+    openedAt.set(page, Date.now());
+    await use(page);
+  },
   step: async ({ page }, use, testInfo) => {
     const records = [];
     const pace = Number(process.env.SPECSHEET_PACE ?? runConfig()?.pace ?? 0);
-    // The page has just been made, which is also when its recording starts.
-    const opened = Date.now();
+    const opened = openedAt.get(page) ?? Date.now();
 
     const step = async (title, meta, body) => {
       if (typeof meta === 'function') {
