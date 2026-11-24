@@ -16,13 +16,13 @@ const THUMB = { min: 96, wide: 1.2, narrow: 2.2 };
 const DECISION = { offset: 60, radius: 16, row: 60, branch: 40, width: 340 };
 // How far a state sits to the right of the state it branches from. The action is
 // written on that stretch of line, so it has to hold a short label.
-const INDENT = 204;
+const INDENT = 224;
 const LANE = { pad: 14, head: 40, gap: 28 };
 const GUTTER = { label: 190, lane: 14, stub: 30 };
 const CHIP = { line: 16, pad: 7 };
 const PAD = 32;
 const HEADER = 64;
-const TRUNK = 16;
+const TRUNK = 24;
 const AUTO = 'Automatically';
 
 const nodeId = (screen, state) => `${screen}/${state ?? ''}`;
@@ -441,7 +441,7 @@ function dataUri(file) {
 }
 
 /** A path through the points, with the corners rounded. */
-function route(points, radius = 10) {
+function route(points, radius = 16) {
   const clean = points.filter((point, index) => index === 0 || point[0] !== points[index - 1][0] || point[1] !== points[index - 1][1]);
   let path = `M ${clean[0][0]} ${clean[0][1]}`;
   for (let index = 1; index < clean.length - 1; index += 1) {
@@ -460,7 +460,7 @@ function route(points, radius = 10) {
   return `${path} L ${end[0]} ${end[1]}`;
 }
 
-const LABEL = { pad: 10, margin: 9 };
+const LABEL = { pad: 12, margin: 12 };
 
 /**
  * An action, written on its arrow: words centred in a box that sits on the line. The box
@@ -479,7 +479,7 @@ function labelSvg(labels, y, { from, to = null, room = 170, tone = '', maxLines 
   const place = to === null ? `data-left="${left}"` : `data-center="${center}"`;
   return (
     `<g class="flow-label" data-pad="${LABEL.pad}" ${place}>` +
-    `<rect x="${left}" y="${y - height / 2}" width="${width}" height="${height}" rx="8" class="edge-label-box${tone ? ` answer-${tone}` : ''}"/>` +
+    `<rect x="${left}" y="${y - height / 2}" width="${width}" height="${height}" rx="${lines.length === 1 ? height / 2 : 10}" class="edge-label-box${tone ? ` answer-${tone}` : ''}"/>` +
     lines
       .map((line, index) => {
         const lineY = y - ((lines.length - 1) * TEXT.labelLine) / 2 + index * TEXT.labelLine + 0.5;
@@ -507,6 +507,8 @@ function edgesSvg(layout, marker) {
   const tall = (id) => sizes.get(id).height;
   const paths = [];
   const labels = [];
+  // Where a line leaves the bottom of a state, marked with a dot so it reads as joined on.
+  const ports = new Set();
   const draw = (points, main, arrow = true) => {
     paths.push(`<path d="${route(points)}" class="edge${main ? ' edge-main' : ''}"${arrow ? ` marker-end="url(#${marker}${main ? '-main' : ''})"` : ''}/>`);
   };
@@ -520,10 +522,10 @@ function edgesSvg(layout, marker) {
     const to = positions.get(pair.to);
     const y2 = middle(pair.to);
     const into = turn(to.lane - 1, `in:${pair.to}`);
-    if (to.lane - lane === 1) return [[into, y1], [into, y2], [to.x - 7, y2]];
+    if (to.lane - lane === 1) return [[into, y1], [into, y2], [to.x - 3, y2]];
     const up = turn(lane, `up:${pair.from}→${pair.to}`);
     const above = layout.top - 12 - layout.skips.indexOf(pair) * 14;
-    return [[up, y1], [up, above], [into, above], [into, y2], [to.x - 7, y2]];
+    return [[up, y1], [up, above], [into, above], [into, y2], [to.x - 3, y2]];
   };
 
   // Down the tree: out of the bottom of a state, then right into the state it becomes.
@@ -531,8 +533,9 @@ function edgesSvg(layout, marker) {
     const from = positions.get(pair.from);
     const to = positions.get(pair.to);
     const trunk = from.x + TRUNK;
-    draw([[trunk, from.y + tall(pair.from)], [trunk, middle(pair.to)], [to.x - 7, middle(pair.to)]], pair.main);
-    labels.push(labelSvg(pair.labels, middle(pair.to), { from: trunk, to: to.x - 14, maxLines: 4 }));
+    draw([[trunk, from.y + tall(pair.from)], [trunk, middle(pair.to)], [to.x - 3, middle(pair.to)]], pair.main);
+    ports.add(`${trunk},${from.y + tall(pair.from)}`);
+    labels.push(labelSvg(pair.labels, middle(pair.to), { from: trunk, to: to.x - 16, maxLines: 4 }));
   }
 
   // Forward to a later screen: right, along the gap between the lanes, and in from the left.
@@ -563,12 +566,13 @@ function edgesSvg(layout, marker) {
     const { x, y } = decision;
     const r = DECISION.radius;
     draw([[trunk, from.y + tall(decision.from)], [trunk, y], [x - r, y]], decision.main, false);
+    ports.add(`${trunk},${from.y + tall(decision.from)}`);
     for (const branch of decision.branches) {
       const { pair } = branch;
       if (branch.kind === 'state') {
         const to = positions.get(pair.to);
-        draw([[x, y + r], [x, middle(pair.to)], [to.x - 7, middle(pair.to)]], pair.main);
-        labels.push(labelSvg([branch.answer], middle(pair.to), { from: x, to: to.x - 14, tone: tone(branch.answer) }));
+        draw([[x, y + r], [x, middle(pair.to)], [to.x - 3, middle(pair.to)]], pair.main);
+        labels.push(labelSvg([branch.answer], middle(pair.to), { from: x, to: to.x - 16, tone: tone(branch.answer) }));
       } else if (branch.kind === 'forward') {
         draw([[x, y + r], [x, branch.y], ...onward(pair, decision.lane, branch.y)], pair.main);
         labels.push(labelSvg([branch.answer], branch.y, { from: x + 12, room: 120, tone: tone(branch.answer) }));
@@ -594,7 +598,8 @@ function edgesSvg(layout, marker) {
   }
 
   // Every line is drawn before any label, so a label is never hidden behind a line.
-  return paths.join('') + labels.join('');
+  const dots = [...ports].map((at) => `<circle cx="${at.split(',')[0]}" cy="${at.split(',')[1]}" r="3.5" class="port"/>`).join('');
+  return { lines: paths.join(''), marks: dots + labels.join('') };
 }
 
 function nodeSvg(node, position, isStart, chips, prefix, hasChildren, size) {
@@ -602,7 +607,7 @@ function nodeSvg(node, position, isStart, chips, prefix, hasChildren, size) {
   const NODE = size;
   const inner = NODE.width - 20;
   const parts = [];
-  parts.push(`<rect x="${x}" y="${y}" width="${NODE.width}" height="${NODE.height}" rx="12" class="${node.missing ? 'node node-missing' : 'node'}"/>`);
+  parts.push(`<rect x="${x}" y="${y}" width="${NODE.width}" height="${NODE.height}" rx="14" class="${node.missing ? 'node node-missing' : 'node'}"/>`);
 
   const image = node.shot ? dataUri(node.shot) : null;
   if (image) {
@@ -666,7 +671,9 @@ function flowSvg(graph, layout, prefix, marker) {
   const nodes = graph.nodes
     .map((node) => nodeSvg(node, layout.positions.get(node.id), graph.starts.includes(node.id), layout.chips.get(node.id), prefix, hangs.has(node.id), layout.sizes.get(node.id)))
     .join('');
-  return bands + edgesSvg(layout, marker) + nodes;
+  // Lines go under the states, so they tuck in behind the boxes. Labels and dots go on top.
+  const edges = edgesSvg(layout, marker);
+  return bands + edges.lines + nodes + edges.marks;
 }
 
 /** The user flow as a self-contained SVG: one drawing per flow, one under the other. */
@@ -697,20 +704,21 @@ export function renderFlowSvg(model, viewportName = model.meta.viewports[0]?.nam
     .title { font: 600 20px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1a1a1a; }
     .subtitle { font: 400 14px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #636363; }
     .flow-name { font: 600 15px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1a1a1a; }
-    .lane { fill: #f6f6f6; stroke: #e4e4e4; }
+    .lane { fill: #f7f7f7; stroke: none; }
     .lane-name { font: 600 16px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #333333; }
-    .node { fill: #ffffff; stroke: #bdbdbd; stroke-width: 1.5; }
+    .node { fill: #ffffff; stroke: #d4d4d4; stroke-width: 1; filter: url(#specsheet-lift); }
     .node-missing { fill: #fbfbfb; stroke: #8c8c8c; stroke-dasharray: 6 5; }
-    .thumb-frame { fill: none; stroke: #dedede; }
+    .thumb-frame { fill: none; stroke: #e6e6e6; }
     .thumb-empty { fill: #f1f1f1; stroke: #dedede; stroke-dasharray: 4 4; }
     .thumb-text { font: 400 13px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #636363; }
     .node-state { font: 600 16px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1a1a1a; }
     .start-pill { fill: #e9e9e9; }
     .start-text { font: 600 12px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #333333; }
-    .edge { fill: none; stroke: #9a9a9a; stroke-width: 1.5; }
-    .edge-main { stroke: #1a1a1a; stroke-width: 3; }
-    .edge-label-box { fill: #ffffff; stroke: #d2d2d2; }
-    .edge-label { font: 400 14px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1a1a1a; }
+    .edge { fill: none; stroke: #7a7a7a; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    .edge-main { stroke: #1a1a1a; stroke-width: 2.5; }
+    .port { fill: #ffffff; stroke: #7a7a7a; stroke-width: 1.5; }
+    .edge-label-box { fill: #ffffff; stroke: #d9d9d9; }
+    .edge-label { font: 500 13.5px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1a1a1a; }
     .decision { fill: #fff8e6; stroke: #b98a1e; stroke-width: 1.5; }
     .decision-main { stroke-width: 2.5; }
     .decision-mark { font: 700 14px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #7a4708; }
@@ -763,8 +771,9 @@ export function renderFlowSvg(model, viewportName = model.meta.viewports[0]?.nam
     // Scoped to this drawing, so the rules cannot leak into a page it is placed in.
     `<style>${style.replace(/^(\s*)\./gm, '$1.specsheet-flow .')}</style>` +
     `<defs><linearGradient id="specsheet-fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#fff"/></linearGradient>` +
-    `<marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9 z" fill="#9a9a9a"/></marker>` +
-    `<marker id="arrowhead-main" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9 z" fill="#1a1a1a"/></marker></defs>` +
+    `<filter id="specsheet-lift" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.5" flood-color="#000" flood-opacity="0.08"/></filter>` +
+    `<marker id="arrowhead" viewBox="0 0 12 12" refX="10.5" refY="6" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M1.5 1.5 L11 6 L1.5 10.5 L4 6 z" fill="#7a7a7a"/></marker>` +
+    `<marker id="arrowhead-main" viewBox="0 0 12 12" refX="10.5" refY="6" markerWidth="14" markerHeight="14" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M1.5 1.5 L11 6 L1.5 10.5 L4 6 z" fill="#1a1a1a"/></marker></defs>` +
     `<rect class="bg" width="${width}" height="${height}"/>` +
     `<text x="${PAD}" y="${PAD + 10}" dominant-baseline="central" class="title">User flow: ${escapeHtml(model.meta.title)}</text>` +
     `<text x="${PAD}" y="${PAD + 34}" dominant-baseline="central" class="subtitle">${escapeHtml(subtitle)}</text>` +
