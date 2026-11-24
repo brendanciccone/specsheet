@@ -124,6 +124,9 @@ test('the thresholds can be changed in the config, together or one at a time', (
   assert.deepEqual(result.warnings, []);
   assert.deepEqual(result.limits, { scenarios: 12, screens: 30, requirements: 8 });
   assert.throws(() => sizeCheck(handoffFolder({ warnAt: { pages: 3 } })), /"warnAt" takes a number/);
+  for (const bad of [true, 'twelve', [12], { toString: 1 }, { scenarios: 0 }]) {
+    assert.throws(() => sizeCheck(handoffFolder({ warnAt: bad })), /"warnAt" takes a number/, JSON.stringify(bad));
+  }
 });
 
 test('a warning says where the story could be split', () => {

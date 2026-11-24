@@ -28,7 +28,7 @@ export function hasFfmpeg() {
 export function shotCuts(steps) {
   const cuts = [];
   for (const step of steps ?? []) {
-    if (!Array.isArray(step.shotAt)) continue;
+    if (!Array.isArray(step.shotAt) || step.shotAt.length !== 2 || !step.shotAt.every(Number.isFinite)) continue;
     const from = Math.max(0, step.shotAt[0] / 1000 - 0.2);
     const to = step.shotAt[1] / 1000 + 0.45;
     const last = cuts[cuts.length - 1];
@@ -44,14 +44,18 @@ export function shotCuts(steps) {
   return cuts.map(([from, to]) => [Number(from.toFixed(2)), Number(to.toFixed(2))]);
 }
 
+/** The ffmpeg filter that leaves the cuts out of a video and closes the gaps. Empty when there are none. */
+export function cutFilter(cuts) {
+  if (!cuts.length) return '';
+  return `select='not(${cuts.map(([from, to]) => `between(t,${from},${to})`).join('+')})',setpts=N/FRAME_RATE/TB,`;
+}
+
 /** Copy a recording into the output folder, as MP4 when ffmpeg is available. */
 function exportVideo(source, target, useFfmpeg, cuts = []) {
   fs.mkdirSync(path.dirname(target), { recursive: true });
   if (useFfmpeg) {
     const mp4 = `${target}.mp4`;
-    const keep = cuts.length
-      ? `select='not(${cuts.map(([from, to]) => `between(t,${from},${to})`).join('+')})',setpts=N/FRAME_RATE/TB,`
-      : '';
+    const keep = cutFilter(cuts);
     const result = spawnSync(
       'ffmpeg',
       ['-y', '-loglevel', 'error', '-i', source, '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
@@ -253,6 +257,9 @@ export async function build(dir, { png = true, videos, log = () => {} } = {}) {
     const scenarios = model.flows.flatMap((flow) => flow.scenarios);
     if (scenarios.length && !scenarios.some((scenario) => scenario.video && fs.existsSync(scenario.video))) {
       log('The last run recorded no video, so there are no videos. Run again with videos on to record them.');
+    }
+    if (!useFfmpeg && scenarios.some((scenario) => shotCuts(scenario.steps).length)) {
+      log('ffmpeg is not installed, so the moment each screenshot is taken could not be cut from the videos. The picture can jump there.');
     }
     if (videoMode === 'flow' && !useFfmpeg) {
       log('ffmpeg is not installed, so the scenarios could not be joined into one video per flow. Wrote one video per scenario.');

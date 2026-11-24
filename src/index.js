@@ -320,8 +320,13 @@ export const test = base.extend({
         throw new Error(`step("${title}"): capture must be one of ${CAPTURE_MODES.join(', ')}.`);
       }
 
-      if (Boolean(meta?.decision) !== Boolean(meta?.answer)) {
+      const given = (value) => value !== undefined && value !== null;
+      const words = (value) => typeof value === 'string' && value.trim() !== '';
+      if (given(meta?.decision) !== given(meta?.answer)) {
         throw new Error(`step("${title}"): "decision" and "answer" go together. Give both, or neither.`);
+      }
+      if (given(meta?.decision) && !(words(meta.decision) && words(meta.answer))) {
+        throw new Error(`step("${title}"): "decision" and "answer" are each a few words of text.`);
       }
 
       const record = {

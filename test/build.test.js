@@ -141,7 +141,9 @@ test('user flow: one node per screen and state, one arrow per action', () => {
   for (const node of graph.nodes) assert.ok(layout.positions.has(node.id));
   const svg = renderFlowSvg(model());
   assert.match(svg, /^<svg /);
-  assert.match(svg, /I pay with a valid/);
+  // A label wraps onto lines, so read its lines back together.
+  const words = [...svg.matchAll(/class="edge-label">([^<]*)</g)].map((match) => match[1]).join(' ');
+  assert.match(words, /I pay with a valid card/);
 });
 
 // A flow with branches inside a screen, a way back, and a change nobody asked for.
@@ -299,6 +301,22 @@ test('a requirement links to the scenario that proves it, in the right flow', as
   assert.match(html, /<span class="scenario-brief">R&lt;1&gt; · /);
 });
 
+test('user flow: an action with no words still draws, and screens outrank states for the main path', () => {
+  const run = (title, steps) => ({ ...scenario(title, [], steps.map(([text, screen, state]) => step(text, screen, state))), declaredStates: {} });
+  const many = Array.from({ length: 6 }, (_, index) => ['When I go on', 'one', `s${index}`]);
+  const raw = {
+    finishedAt: '2026-11-15T12:00:00.000Z',
+    errors: [],
+    scenarios: [run('Many states', [['Given I start', 'one', 'a'], ...many]), run('Two screens', [['Given I start', 'one', 'a'], ['When', 'two', 'a']])],
+  };
+  const flow = buildModel({ results: raw, config, requirements: [], openQuestions: [] }).flows[0];
+  const graph = buildGraph(flow, 'Desktop');
+  assert.deepEqual(graph.mainPath, ['one/a', 'two/a']);
+  assert.ok(graph.edges.every((edge) => edge.label.trim() !== ''));
+  const svg = renderFlowSvg({ meta: { title: 'T', viewports: [viewport] }, flows: [flow] });
+  assert.doesNotMatch(svg, /NaN|Infinity/);
+});
+
 test('user flow: a preview has the shape of its own screenshot', async () => {
   const fs = await import('node:fs');
   const os = await import('node:os');
@@ -432,6 +450,12 @@ test('the video: a caption leads its step, and screenshot moments are cut', asyn
   // Two screenshots close together become one cut. Steps with no full-page screenshot have none.
   assert.deepEqual(shotCuts([{ shotAt: [4000, 4300] }, {}, { shotAt: [4600, 4900] }, { shotAt: [9000, 9200] }]), [[0, 0.12], [3.8, 5.35], [8.8, 9.65]]);
   assert.deepEqual(shotCuts([]), []);
+  // A step whose times are missing or broken is left out, not turned into a bad cut.
+  assert.deepEqual(shotCuts([{ shotAt: [] }, { shotAt: [1000] }, { shotAt: [1000, null] }, { shotAt: ['a', 'b'] }]), []);
+
+  const { cutFilter } = await import('../src/build/index.js');
+  assert.equal(cutFilter([]), '');
+  assert.equal(cutFilter([[0, 0.12], [3.8, 5.35]]), "select='not(between(t,0,0.12)+between(t,3.8,5.35))',setpts=N/FRAME_RATE/TB,");
 });
 
 test('assumed standard behaviour is listed once, and only when there is some', async () => {

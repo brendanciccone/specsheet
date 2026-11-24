@@ -50,7 +50,7 @@ export function buildGraph(flow, viewportName) {
     let choice = null;
     let used = false;
     // A scenario can fail after its last step, with every step passing. It is still not a path to follow.
-    let complete = scenario.status === undefined || scenario.status === 'passed';
+    let complete = scenario.status === 'passed';
     const path = { nodes: [], edges: [] };
     for (const step of scenario.steps) {
       if (!step.groupPassed) {
@@ -68,7 +68,7 @@ export function buildGraph(flow, viewportName) {
       if (previous && previous.id !== node.id) {
         // One action explains one arrow. A later change with no new action is the
         // prototype moving on by itself, such as "sending" turning into "sent".
-        const label = action && !used ? action : action ? AUTO : stripKeyword(step.title);
+        const label = (action && !used ? action : action ? AUTO : stripKeyword(step.title)) || step.title.trim() || AUTO;
         const decision = action && !used ? choice : null;
         used = true;
         const key = `${previous.id}→${node.id}→${label}${decision ? `→${decision.question}→${decision.answer}` : ''}`;
@@ -82,8 +82,10 @@ export function buildGraph(flow, viewportName) {
   }
 
   // The main path: the passing scenario that visits the most screens, then the most states.
-  const reach = (path) => new Set(path.nodes.map((id) => nodes.get(id).screen)).size * 1000 + new Set(path.nodes).size;
-  const mainPath = paths.reduce((best, path) => (!best || reach(path) > reach(best) ? path : best), null);
+  const screensOf = (path) => new Set(path.nodes.map((id) => nodes.get(id).screen)).size;
+  const statesOf = (path) => new Set(path.nodes).size;
+  const further = (path, best) => screensOf(path) > screensOf(best) || (screensOf(path) === screensOf(best) && statesOf(path) > statesOf(best));
+  const mainPath = paths.reduce((best, path) => (!best || further(path, best) ? path : best), null);
   if (mainPath && mainPath.edges.length) {
     for (const id of mainPath.nodes) nodes.get(id).main = true;
     for (const key of mainPath.edges) edges.get(key).main = true;
@@ -468,6 +470,7 @@ const LABEL = { pad: 10, margin: 9 };
 function labelSvg(labels, y, { from, to = null, room = 170, tone = '', maxLines = 3, trail = '' }) {
   const space = to === null ? room : Math.max(60, to - from - 2 * LABEL.margin - 2 * LABEL.pad);
   const lines = wrap(labels.join(' / '), space, TEXT.label, { bold: Boolean(tone), maxLines });
+  if (!lines.length) return '';
   const width = Math.ceil(Math.max(...lines.map((line) => textWidth(line, TEXT.label, Boolean(tone))))) + 2 * LABEL.pad;
   const height = lines.length * TEXT.labelLine + 10;
   const left = to === null ? from : (from + to) / 2 - width / 2;

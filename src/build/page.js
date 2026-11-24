@@ -185,7 +185,10 @@ const VIEW_SCRIPT = `
     }
   }
   function follow() {
-    var target = location.hash ? document.getElementById(decodeURIComponent(location.hash.slice(1))) : null;
+    var name = location.hash.slice(1);
+    // A hand-typed address can hold a stray percent sign, which cannot be decoded.
+    try { name = decodeURIComponent(name); } catch (error) {}
+    var target = name ? document.getElementById(name) : null;
     if (!target) return;
     reveal(target);
     var inner = target.querySelector(':scope > details');
@@ -498,6 +501,8 @@ const SCRIPT = `
     var clone = target.cloneNode(true);
     // A folded scenario is copied whole, as plain headings and paragraphs.
     clone.querySelectorAll('summary').forEach(function (summary) {
+      // A summary that is only a control, such as "Show as a checklist", is not content.
+      if (summary.classList.contains('no-copy')) return summary.remove();
       summary.replaceWith.apply(summary, Array.prototype.slice.call(summary.childNodes));
     });
     clone.querySelectorAll('details').forEach(function (fold) {

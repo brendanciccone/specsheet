@@ -18,6 +18,8 @@ export const BROWSERS = ['chromium', 'chrome', 'msedge'];
  */
 export const WARN_AT = { scenarios: 12, screens: 8, requirements: 8 };
 
+const WARN_AT_HELP = `${CONFIG_FILE}: "warnAt" takes a number, or "scenarios", "screens" and "requirements" as numbers.`;
+
 export const DEFAULTS = {
   title: '',
   ticket: null, // { key, url }
@@ -67,12 +69,12 @@ export function loadConfig(dir) {
   if (typeof config.warnAt === 'number') {
     config.warnAt = { scenarios: config.warnAt, screens: config.warnAt, requirements: config.warnAt };
   } else {
+    const plain = config.warnAt !== null && typeof config.warnAt === 'object' && !Array.isArray(config.warnAt);
+    if (!plain) throw new Error(WARN_AT_HELP);
     config.warnAt = { ...WARN_AT, ...config.warnAt };
   }
   for (const [key, value] of Object.entries(config.warnAt)) {
-    if (!(key in WARN_AT) || !Number.isFinite(value) || value < 1) {
-      throw new Error(`${CONFIG_FILE}: "warnAt" takes a number, or "scenarios", "screens" and "requirements" as numbers.`);
-    }
+    if (!Object.hasOwn(WARN_AT, key) || !Number.isFinite(value) || value < 1) throw new Error(WARN_AT_HELP);
   }
   if (!['mock', 'real'].includes(config.data)) {
     throw new Error(`${CONFIG_FILE}: "data" must be "mock" or "real".`);
