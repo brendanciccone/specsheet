@@ -180,7 +180,7 @@ const paced = new WeakSet();
  * stopped moving. Answers false when the element is already in view. `wait` is how long
  * to stay on what is showing now before leaving it.
  */
-function scrollToward(element, wait) {
+export function scrollToward(element, wait) {
   const box = element.getBoundingClientRect();
   if (!box.width && !box.height) return false;
   const top = 70;
