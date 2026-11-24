@@ -142,7 +142,7 @@ ul, ol { margin: 0 0 10px; padding-left: 22px; }
 li { margin-bottom: 4px; }
 @keyframes arrive { from { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 16%, transparent); }
   to { background: transparent; box-shadow: 0 0 0 6px transparent; } }
-main section:target > .head, .scenario:target > details > summary { border-radius: 6px; animation: arrive 1.6s ease-out; }
+main section:target > .head, .scenario:target > details > summary { animation: arrive 1.6s ease-out; }
 @media (prefers-reduced-motion: reduce) { main section:target > .head, .scenario:target > details > summary { animation: none; } }
 .req-note, .question-detail { display: block; margin-top: 2px; color: var(--muted); font-size: 14px; }
 .questions li + li { margin-top: 10px; }
