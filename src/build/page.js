@@ -95,8 +95,10 @@ table.facts th { width: 150px; }
 .scenario { margin-top: 12px; border: 1px solid var(--line); border-radius: 10px; scroll-margin-top: 12px; }
 .scenario > details > summary { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 12px 16px; cursor: pointer; list-style: none; border-radius: 10px; }
 .scenario > details > summary::-webkit-details-marker { display: none; }
-.scenario > details > summary::before { content: "▸"; flex: none; color: var(--muted); }
-.scenario > details[open] > summary::before { content: "▾"; }
+/* A chevron that turns to point down when its part is open. */
+.scenario > details > summary::before, details.fold > summary::before { content: ""; flex: none; align-self: center; width: 16px; height: 16px; background: var(--muted);
+  -webkit-mask: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M6 3.5 10.5 8 6 12.5' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\") center / contain no-repeat; mask: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M6 3.5 10.5 8 6 12.5' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\") center / contain no-repeat; transition: transform 0.15s ease; }
+.scenario > details[open] > summary::before, details.fold[open] > summary::before { transform: rotate(90deg); }
 .scenario > details > summary:hover { background: var(--soft); }
 .scenario > details > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .scenario > details > summary h3 { flex: 1 1 260px; }
@@ -105,7 +107,8 @@ table.facts th { width: 150px; }
 .scenario-body .tools { float: right; margin: 0 0 8px 12px; }
 .scenario figure img { max-height: 460px; }
 section, article { scroll-margin-top: 12px; }
-details.fold > summary { cursor: pointer; margin-bottom: 10px; color: var(--accent); }
+details.fold > summary { display: flex; align-items: center; gap: 6px; cursor: pointer; margin-bottom: 10px; color: var(--accent); list-style: none; }
+details.fold > summary::-webkit-details-marker { display: none; }
 .scenario-meta { margin: 4px 0 12px; color: var(--muted); font-size: 14px; }
 video.walkthrough { display: block; width: 100%; max-width: 720px; height: auto; margin: 0 0 16px; border: 1px solid var(--line, #dedede); border-radius: 8px; background: var(--soft); aspect-ratio: 16 / 10; object-fit: cover; object-position: top; }
 video.walkthrough[hidden] { display: none; }
@@ -659,7 +662,7 @@ function shotHtml(step, scenario, shown) {
   }
   shown.count += 1;
   const id = `shot-${shown.count}`;
-  const html = figure(step.shot, `${scenario.title}, ${step.title}`, scenario.viewportLabel, id);
+  const html = figure(step.shot, `${scenario.title}, ${step.title}`, shown.many ? scenario.viewport.name : null, id);
   if (html && file) shown.files.set(file, { id });
   return { block: html };
 }
@@ -824,7 +827,8 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
   }
 
   // Scenarios, one section per flow. Each screenshot appears once on the page.
-  const shown = { files: new Map(), count: 0 };
+  // The screen size is under the title, so a caption names it only when there are two.
+  const shown = { files: new Map(), count: 0, many: manyViewports };
   model.flows.forEach((flow, flowIndex) => {
     const key = `flow-${flowIndex}`;
     markdown[key] = `## Scenarios: ${flow.name}\n\n${scenariosMarkdown(flow, model, 'gherkin')}`;
