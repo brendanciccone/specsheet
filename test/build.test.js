@@ -227,6 +227,12 @@ test('user flow: a decision is drawn once, with a branch per answer', () => {
   const svg = renderFlowSvg({ meta: { title: 'T', viewports: [viewport] }, flows: [flow] });
   assert.equal((svg.match(/class="decision-text">Does the bank accept the card\?</g) ?? []).length, 2);
   assert.match(svg, />No</);
+  // Yes is green, No is red, and any other answer is bold on a neutral box.
+  const boxOf = (answer) => new RegExp(`class="edge-label-box answer-(\\w+)"/><text[^>]*class="edge-label answer-text-(\\w+)">${answer}<`).exec(svg)?.slice(1);
+  assert.deepEqual(boxOf('Yes'), ['yes', 'yes']);
+  assert.deepEqual(boxOf('No'), ['no', 'no']);
+  assert.deepEqual(boxOf('Closed'), ['other', 'other']);
+  assert.match(svg, /\.answer-text-other \{[^}]*font-weight: 600/);
 });
 
 test('user flow: answers that lead to the same state share one branch, and none is lost', () => {
@@ -561,4 +567,60 @@ test('a caption stays up long enough to read, and never less than the pace', asy
   assert.equal(readingTime('Then I see it', 3000), 3000);
   assert.equal(readingTime('Given I am on the Help page', 700), 700 + 45 * 27);
   assert.equal(readingTime('x'.repeat(200), 700), 4000);
+});
+
+test('an open question says who to ask and what is built if nobody answers', async () => {
+  const { renderPage } = await import('../src/build/page.js');
+  const openQuestions = [{ question: 'Is a receipt emailed?', who: 'Product', default: 'No receipt is sent.' }, 'Is a receipt needed?'];
+  const built = buildModel({ results: results(), config, requirements, openQuestions, staticFlows });
+  // A plain line and a full question come out in the same shape.
+  assert.deepEqual(built.openQuestions[1], { question: 'Is a receipt needed?', who: null, default: null });
+
+  const comment = commentSections(built, []).join('\n');
+  assert.match(comment, /1\. Is a receipt emailed\?\n   - Ask: Product\n   - If unanswered: No receipt is sent\.\n2\. Is a receipt needed\?/);
+  const page = renderPage(built, { flowImage: null });
+  assert.match(page, /<li>Is a receipt emailed\?<span class="question-detail">Ask: Product<\/span><span class="question-detail">If unanswered: No receipt is sent\.<\/span><\/li>/);
+  assert.match(page, /<li>Is a receipt needed\?<\/li>/);
+  assert.match(page, /Open questions \(2\)/);
+
+  // Text that means something in Markdown is printed as written, on one line.
+  const odd = buildModel({
+    results: results(),
+    config,
+    requirements: requirements.map((item) => (item.id === 'R1' ? { ...item, note: 'Use *card*\nonly | no cash' } : item)),
+    openQuestions: [{ question: 'Is `total_due` shown?', who: 'A | B', default: 'Not *shown*.' }, { who: 'Nobody', default: 'Nothing.' }],
+    staticFlows,
+  });
+  const text = commentSections(odd, []).join('\n');
+  assert.match(text, /- R1: Use \\\*card\\\* only \\\| no cash\n/);
+  assert.match(text, /1\. Is \\`total\\_due\\` shown\?\n   - Ask: A \\\| B\n   - If unanswered: Not \\\*shown\\\*\./);
+  // An entry with no question text is left out, not printed empty.
+  assert.equal(odd.openQuestions.length, 1);
+  assert.doesNotMatch(text, /Nobody/);
+});
+
+test('a decision made on a requirement is printed with it', async () => {
+  const { renderPage } = await import('../src/build/page.js');
+  const noted = requirements.map((item) => (item.id === 'R2' ? { ...item, note: 'The error stays until the card is changed.' } : item));
+  const built = buildModel({ results: results(), config, requirements: noted, staticFlows });
+  assert.match(commentSections(built, []).join('\n'), /\n\nNotes:\n- R2: The error stays until the card is changed\.\n/);
+  assert.match(renderPage(built, { flowImage: null }), /<span class="req-note">Note: The error stays until the card is changed\.<\/span>/);
+  // No notes, no heading for them.
+  assert.doesNotMatch(commentSections(model(), []).join('\n'), /Notes:/);
+});
+
+test('user flow: an action is told apart from an answer by its colour', () => {
+  const svg = renderFlowSvg(model());
+  // Look at the labels on the arrows, not at the legend, which always has the blue box.
+  const labels = [...svg.matchAll(/<g class="flow-label"[^>]*><rect[^>]*class="([^"]*)"\/>/g)].map((match) => match[1]);
+  assert.ok(labels.length > 0);
+  assert.ok(labels.every((name) => name === 'edge-label-box'), labels.join(', '));
+  assert.match(svg, />An action</);
+  assert.match(svg, /\.edge-label-box \{ fill: #e6f0ff;/);
+
+  // A change nobody asked for keeps a plain box, so it is not read as an action.
+  const raw = results();
+  raw.scenarios = [scenario('Paid', ['R1'], [step('Given I am on the payment step', 'checkout/payment', 'ready'), step('When I pay', 'checkout/payment', 'submitting'), step('Then I see my order', 'checkout/done', 'loaded')])];
+  const auto = renderFlowSvg(buildModel({ results: raw, config, requirements, staticFlows }));
+  assert.match(auto, /class="edge-label-box edge-label-box-auto"\/><text[^>]*class="edge-label edge-label-auto">Automatically</);
 });

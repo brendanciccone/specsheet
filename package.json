@@ -1,6 +1,6 @@
 {
   "name": "specsheet",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Turn a ticket and a design into everything engineering needs. A user flow, walkthrough videos and acceptance criteria, each step run against the design.",
   "license": "MIT",
   "repository": {

@@ -32,8 +32,13 @@ handoff files. No model is involved in a run.
    There is no "don't ask again".
 7. **Never weaken a scenario to make it pass.** A failing step means the prototype and
    the scenario disagree. That is a finding for the designer, not a bug to hide.
-8. **Do not make design decisions.** When a state, a message or a behaviour is missing,
-   ask the designer. If they have no answer yet, record an open question.
+8. **Ask few open questions, and only real ones.** An open question is something only a
+   person can settle. It needs all four: it ends in a question mark, you can name who
+   can answer it, neither the ticket nor any frame or note in the design answers it, and
+   a different answer would change what gets built or tested. Each one says what you
+   built in the meantime. A choice you made to keep going is not a question: write it as
+   a `note` on the requirement, where the reader can overrule it. Write the questions
+   late, in step 9, not while listing requirements.
 9. **Leave out what everyone already expects.** A handoff says what this design does,
    not how browsers and dialogs work. Standard behaviour goes in one "assumed" list, not
    in scenarios. See "What earns a scenario" in
@@ -52,7 +57,7 @@ handoff files. No model is involved in a run.
 The skill is the only thing the user installs. You set up the rest, in the project that
 holds the design, before step 1.
 
-This skill needs Specsheet 0.3.0 or later.
+This skill needs Specsheet 0.4.0 or later.
 
 1. Run `npx --no specsheet version`. Write it exactly so: `npx` keeps `--version` for
    itself and prints its own.
@@ -144,8 +149,13 @@ Read the ticket and the design, then show the user a numbered list:
 R1  A visitor can send a message with their name, email and text.   stated
 R2  An invalid email address shows an error and nothing is sent.    stated
 R3  If sending fails, the visitor keeps their message.              inferred from the design
-Open question: no loading state is designed for sending. Is one needed?
 ```
+
+Do not list open questions yet. Most of what looks unclear now is answered by a frame
+you have not read closely or settles itself once the prototype exists. Ask the user now
+only about something that stops you listing the requirements at all. For anything else,
+take the most likely reading and carry on: it becomes a requirement's `note` or an open
+question in step 9, once you know which.
 
 Keep the list to what this ticket and this design ask for. Behaviour that every product
 already has, such as a dialog closing on Escape or the Back button going back, is not a
@@ -164,7 +174,7 @@ hand off the cart first. Split that way, or continue as one?" Carry on as one if
 prefers.
 
 Wait for the user to approve or edit it, then write `requirements.json`, with the assumed
-lines in its `assumed` list.
+lines in its `assumed` list and `openQuestions` left empty for now.
 
 ### 4. Early size check
 
@@ -237,12 +247,50 @@ the user:
 |---|---|---|
 | Failed step | The prototype does not do what the scenario says | Work out with the user which one is wrong. Fix that one. Never loosen a check to pass |
 | Unverified "Then" step | The step has no check, so nothing was proven | Add a check for what the step claims |
-| State never reached | A state was declared and no step lands on it | Ask the user: design it, mark it not applicable with a reason, or leave it flagged and add an open question. If you declared it only for completeness and neither the ticket nor the design calls for it, take it out of `states` |
+| State never reached | A state was declared and no step lands on it | If neither the ticket nor a frame calls for it, take it out of `states`. Otherwise ask the user: design it, mark it not applicable with a reason, or leave it flagged. The handoff already reports a flagged state, so it needs no open question as well |
 | Requirement not proven | No passing scenario covers it | Add a scenario, or ask the user whether it is out of scope |
 
 Run again until the only findings left are ones the user chose to leave flagged.
 
-### 9. Final run
+### 9. Write the open questions
+
+Now, and not before: every frame has been read, the prototype is built and the findings
+are handled. Go through what was still unclear and sort each item.
+
+It is an open question only if all four are true:
+
+- It is a question, ending in a question mark.
+- You can name who can answer it: the designer, the product owner, whoever owns the API.
+- Neither the ticket nor any frame or note in the design answers it. Look again before
+  you write it down.
+- A different answer would change what gets built or tested.
+
+Write each one with who to ask and the default, which is what you built and what stays
+if nobody answers:
+
+```json
+{ "question": "Should the form show that it is sending while it waits?", "who": "Design",
+  "default": "No sending state. The button stays as it is until the reply comes." }
+```
+
+Everything else goes somewhere else:
+
+| What you have | Where it goes |
+|---|---|
+| A decision you made to keep going | The `note` of the requirement it belongs to |
+| Behaviour you are nearly sure of | `assumed` |
+| A state nobody drew | Nowhere, unless the ticket asks for it. Then it is a declared state, and the handoff reports it as not shown |
+| The design disagrees with itself | To the designer, as a finding in your report (step 11). Say which one you built |
+
+Most handoffs end with none to three. With more than five, some are not questions for a
+person.
+
+Write them to `requirements.json`, then run `npx specsheet check handoff/<TICKET-KEY>`:
+it names the ones that do not end in a question mark or have no `who` or no `default`.
+Put those right, then show the user the list. A question the user answers on the spot
+comes off it: the answer goes into the requirement or its `note`.
+
+### 10. Final run
 
 ```bash
 npx specsheet run handoff/<TICKET-KEY>
@@ -250,9 +298,11 @@ npx specsheet run handoff/<TICKET-KEY>
 
 Without `--fast`, the videos are paced and captioned so a person can follow them.
 
-### 10. Report, then offer to post
+### 11. Report, then offer to post
 
-Tell the user what was produced, where it is, and which findings are still open. The
+Tell the user what was produced, where it is, and which findings are still open. List
+the places where the design disagrees with itself, for the designer, with what you built
+in each. The
 handoff page is `handoff/<TICKET-KEY>/out/handoff.html`, and it works on its own in any
 platform.
 

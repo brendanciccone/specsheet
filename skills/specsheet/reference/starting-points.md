@@ -81,6 +81,12 @@ for every frame in the story:
 What comes back as code is a reference for the values, not code to paste. The values in
 it are the ones to use.
 
+**Check that nothing was cut off.** The Figma connection cuts a long answer at 100,000
+characters. If `get_design_context` returns exactly 100,000 characters, you do not have
+the whole frame: read the nodes that are missing, one child at a time, until you have
+every layer. Something that seems to be missing from a frame is often only the part that
+was cut off, so do this before you report anything as missing.
+
 **Then rebuild each screen so nothing differs:**
 
 - **Images come from the file.** Never swap in an icon from a library, an emoji, a
@@ -111,8 +117,12 @@ engineering.
 - Frames show how a screen looks, not what happens between screens. Use the frame order,
   the frame names and any prototype links, and ask the user about anything you cannot
   tell. Do not invent behaviour.
-- A state with no frame is a missing state. Ask the user what should happen, or record
-  an open question.
+- A state with no frame is raised only when the ticket asks for it. Then declare it in
+  `states`, and the handoff reports it as not shown. Do not write an open question for
+  every state nobody drew.
+- Where the design disagrees with itself, such as two frames with different wording for
+  the same button, build what the most finished frame shows and tell the user. That is a
+  finding for the designer, not an open question.
 - Set `design.rebuilt` to `true`. The frame sizes give the screen size, and
   `design.link` is the link to the frames.
 

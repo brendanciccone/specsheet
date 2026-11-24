@@ -490,7 +490,7 @@ function labelSvg(labels, y, { from, to = null, room = 170, tone = '', maxLines 
   const place = to === null ? `data-left="${left}"` : `data-center="${center}"`;
   return (
     `<g class="flow-label" data-pad="${LABEL.pad}" ${place}>` +
-    `<rect x="${left}" y="${y - height / 2}" width="${width}" height="${height}" rx="${lines.length === 1 ? height / 2 : 10}" class="edge-label-box${tone ? ` answer-${tone}` : ''}"/>` +
+    `<rect x="${left}" y="${y - height / 2}" width="${width}" height="${height}" rx="${lines.length === 1 ? height / 2 : 10}" class="edge-label-box${auto ? ' edge-label-box-auto' : ''}${tone ? ` answer-${tone}` : ''}"/>` +
     lines
       .map((line, index) => {
         const lineY = y - ((lines.length - 1) * TEXT.labelLine) / 2 + index * TEXT.labelLine + 0.5;
@@ -505,11 +505,14 @@ function labelSvg(labels, y, { from, to = null, room = 170, tone = '', maxLines 
   );
 }
 
-/** A "Yes" answer is green and a "No" answer is red. Any other answer keeps the plain colour. */
+/**
+ * A "Yes" answer is green and a "No" answer is red. Any other answer is neutral: bold
+ * like those two, on a white box with a grey edge, so it is not taken for an action.
+ */
 function tone(answer) {
   if (/^(yes|true|ok)\b/i.test(answer.trim())) return 'yes';
   if (/^(no|false)\b/i.test(answer.trim())) return 'no';
-  return '';
+  return 'other';
 }
 
 /** Every arrow of a flow, and the labels that sit on them. */
@@ -733,14 +736,17 @@ export function renderFlowSvg(model, viewportName = model.meta.viewports[0]?.nam
     .start-text { font: 600 12px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #333333; }
     .edge { fill: none; stroke: #9a9a9a; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
     .port { fill: #9a9a9a; stroke: #ffffff; stroke-width: 2; }
-    .edge-label-box { fill: #ffffff; stroke: #d9d9d9; }
-    .edge-label { font: 500 13.5px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1a1a1a; }
+    .edge-label-box { fill: #e6f0ff; stroke: #8fb5f2; }
+    .edge-label { font: 500 13.5px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #0f3a78; }
+    .edge-label-box-auto { fill: #ffffff; stroke: #d9d9d9; }
     .decision { fill: #fff4d6; stroke: #d9a531; stroke-width: 1.5; }
     .decision-text { font: 600 14px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1a1a1a; }
     .answer-yes { fill: #e9f6e2; stroke: #5a9a3c; }
     .answer-no { fill: #fdecec; stroke: #c96a6a; }
     .answer-text-yes { fill: #24520d; font-weight: 600; }
     .answer-text-no { fill: #8f2020; font-weight: 600; }
+    .answer-other { fill: #ffffff; stroke: #bdbdbd; }
+    .answer-text-other { fill: #1a1a1a; font-weight: 600; }
     .edge-label-auto { font-style: italic; fill: #636363; }
     .chip { font: 400 13px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #636363; }
     .legend { font: 400 13px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #636363; }
@@ -763,10 +769,11 @@ export function renderFlowSvg(model, viewportName = model.meta.viewports[0]?.nam
 
   const legendItems = [['<rect x="0" y="-7" width="22" height="14" rx="4" class="node"/>', 'Shown in a scenario', 30]];
   if (hasMissing) legendItems.push(['<rect x="0" y="-7" width="22" height="14" rx="4" class="node node-missing"/>', 'Needed, but not shown or failing', 30]);
+  legendItems.push(['<rect x="0" y="-7" width="22" height="14" rx="7" class="edge-label-box"/>', 'An action', 30]);
   if (drawings.some((item) => item.layout.decisions.length)) {
     legendItems.push(['<rect x="0" y="-7" width="22" height="14" rx="7" class="decision"/>', 'A decision, with one branch per answer', 30]);
   }
-  if (hasBack) legendItems.push(['<text x="0" y="0" dominant-baseline="central" class="chip">↩</text>', 'Leads to a state shown elsewhere', 16]);
+  if (hasBack) legendItems.push(['<text x="0" y="0" dominant-baseline="central" class="chip">↩</text>', 'Leads to a state shown elsewhere', 20]);
   let legendX = PAD;
   const legend = legendItems
     .map(([mark, text, offset]) => {

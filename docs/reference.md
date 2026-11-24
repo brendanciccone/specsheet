@@ -33,7 +33,7 @@ Claude runs these for you.
 | `specsheet doctor [folder]` | Says whether this computer has what a run needs: a browser that starts, video recording, and `ffmpeg` for the single walkthrough video |
 | `specsheet version` | Prints the version |
 | `specsheet init <folder>` | Creates a handoff folder with starter files |
-| `specsheet check <folder>` | Counts what the handoff contains. Above 12 scenarios or 8 screens, or 8 requirements before any scenario is written, it recommends splitting the story and says where. Never blocks |
+| `specsheet check <folder>` | Counts what the handoff contains. Above 12 scenarios or 8 screens, or 8 requirements before any scenario is written, it recommends splitting the story and says where. It also notes an open question that is not a question, or names nobody to ask or no default, and a step that opens a page by its address after its scenario has started. Never blocks |
 | `specsheet run <folder> [--fast]` | Runs every scenario, then builds the handoff files. `--fast` skips the pauses and captions, for use while fixing findings |
 | `specsheet build <folder>` | Rebuilds the handoff files from the last run, without running anything again |
 
@@ -86,9 +86,9 @@ Everything lands in `out/` inside the handoff folder.
 | File | What it is |
 |---|---|
 | `handoff.html` | The full handoff as one page, with a list of contents and a copy button on every section. With more than six scenarios, the passing ones start folded to one line each. The user flow can be zoomed and dragged, and any screenshot opens full size. The screenshots and videos are inside the file, so it can be sent on its own. Each screenshot appears once: a later step on the same screen links back to it |
-| `flow.png` | The user flow. One column per screen, with its states as boxes: the state you arrive on at the top, and the states it can turn into branching below. Arrows are actions. A decision the scenarios name is a yellow badge with its question in it, and one branch per answer. Actions that go back are written under the state they start from, not drawn. Each flow gets its own drawing |
+| `flow.png` | The user flow. One column per screen, with its states as boxes: the state you arrive on at the top, and the states it can turn into branching below. Arrows are actions, each named in a blue label. A change nobody asked for is labelled "Automatically", in white. A decision the scenarios name is a yellow badge with its question in it, and one branch per answer. Actions that go back are written under the state they start from, not drawn. Each flow gets its own drawing |
 | `screens/` | One full-page screenshot per screen, state and screen size |
-| `videos/` | One captioned walkthrough video per flow, every scenario in order. Each scenario opens on a card with its number and name. Each step's caption comes up first, then the step is done at the speed of a person, with a pointer that moves to each control: scrolling, typing, clicking |
+| `videos/` | One captioned walkthrough video per flow, every scenario in order. Each scenario opens on a card with its number and name. Each step's caption comes up first, then the step is done at the speed of a person, with a pointer that moves to each control: scrolling, typing, clicking. The page also scrolls to what a step checks, so the result is on screen. A page opened by its address, Back and a reload are named in a small sign at the top, so the page is not seen to jump by itself |
 | `features/` | One Gherkin feature file per flow, for QA to import. Steps that every scenario opens with are written once, as a `Background` |
 | `checklist.md` | The acceptance checklist |
 | `comment.md` | The text for a Jira comment, split into parts if it is too long for one |

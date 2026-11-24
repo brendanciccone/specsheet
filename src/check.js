@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadConfig, loadRequirements } from './config.js';
 import { featureText } from './build/gherkin.js';
-import { plural } from './util.js';
+import { openQuestion, plural } from './util.js';
 
 // A quoted string. Named groups, so the pattern can sit inside a larger one.
 const STRING = String.raw`(?<q>['"\`])(?<s>(?:\\.|(?!\k<q>)[^\\])*)\k<q>`;
@@ -83,6 +83,8 @@ export function parseScenarioSource(source) {
         title: call.title,
         screen: firstString(head, 'screen'),
         state: firstString(head, 'state'),
+        // After a scenario's first step, a page opened by its address is a jump nobody clicked for.
+        jumps: scenario.steps.length > 0 && /\.goto\(/.test(tail),
       });
     }
   });
@@ -131,6 +133,43 @@ function splitHints(flows, requirements, limits) {
   return hints;
 }
 
+// More open questions than this is more than a reader will answer.
+const QUESTIONS_AT = 5;
+
+/**
+ * What to put right in the open questions. Each is for a person to answer, so it has to
+ * be a question, name who can answer it, and say what is built if nobody does.
+ */
+export function questionNotes(list) {
+  const notes = [];
+  const questions = list.map(openQuestion);
+  const numbers = (test) =>
+    questions
+      .map((entry, index) => (test(entry) ? index + 1 : 0))
+      .filter(Boolean)
+      .join(', ');
+  const lacks = [
+    [(entry) => !entry.question, 'has no "question" text, so the handoff leaves it out'],
+    [
+      (entry) => entry.question && !entry.question.endsWith('?'),
+      'does not end in a question mark. If it is a decision you made, it goes in the "note" of the requirement it belongs to',
+    ],
+    [(entry) => !entry.who, 'missing "who": the person or role that can answer it'],
+    [(entry) => !entry.default, 'missing "default": what is built if nobody answers'],
+  ];
+  for (const [test, problem] of lacks) {
+    const list = numbers(test);
+    if (list) notes.push(`Open ${list.includes(',') ? 'questions' : 'question'} ${list}: ${problem}.`);
+  }
+  if (questions.length > QUESTIONS_AT) {
+    notes.push(
+      `${questions.length} open questions is a lot to ask of a reader. Keep the ones whose answer changes what is built or tested. ` +
+        'A decision you made goes in a requirement\'s "note", standard behaviour in "assumed", and a place where the design disagrees with itself goes to the designer.',
+    );
+  }
+  return notes;
+}
+
 /**
  * Count what the handoff contains and decide whether to warn.
  * `screens` is the number of screens Claude counted in the design, for the early check
@@ -138,7 +177,7 @@ function splitHints(flows, requirements, limits) {
  */
 export function sizeCheck(dir, { screens: screensHint } = {}) {
   const config = loadConfig(dir);
-  const { requirements } = loadRequirements(dir);
+  const { requirements, openQuestions } = loadRequirements(dir);
   const flows = readStaticFlows(dir);
 
   const scenarios = flows.flatMap((flow) => flow.scenarios);
@@ -175,6 +214,7 @@ export function sizeCheck(dir, { screens: screensHint } = {}) {
     screens: screenCount,
     states: states.size,
     viewports: config.viewports.length,
+    openQuestions: openQuestions.length,
   };
 
   const warnings = [];
@@ -203,6 +243,15 @@ export function sizeCheck(dir, { screens: screensHint } = {}) {
   if (counts.viewports > 1) {
     notes.push(`${counts.viewports} screen sizes are set, so every scenario runs ${counts.viewports} times.`);
   }
+  notes.push(...questionNotes(openQuestions));
+  const jumps = scenarios.flatMap((scenario) => scenario.steps.filter((step) => step.jumps).map((step) => `"${step.title}" in "${scenario.title}"`));
+  if (jumps.length) {
+    notes.push(
+      `${plural(jumps.length, 'step opens', 'steps open')} a page by its address after the scenario has started: ${jumps.slice(0, 3).join(', ')}` +
+        `${jumps.length > 3 ? `, and ${jumps.length - 3} more` : ''}. In the video the page jumps there with nothing clicked. ` +
+        'If a user gets there through a link or a button, click that instead.',
+    );
+  }
 
   return { early, counts, commentChars, warnings, notes, limits };
 }
@@ -221,6 +270,7 @@ export function formatSizeCheck(result) {
     lines.push(`  ${plural(counts.screens, 'screen')}, ${plural(counts.states, 'state')}`);
     lines.push(`  Ticket text: about ${result.commentChars.toLocaleString('en-US')} characters`);
   }
+  if (counts.openQuestions) lines.push(`  ${plural(counts.openQuestions, 'open question')}`);
   for (const warning of result.warnings) lines.push(`  WARNING: ${warning}`);
   for (const note of result.notes) lines.push(`  Note: ${note}`);
   if (!result.warnings.length) {

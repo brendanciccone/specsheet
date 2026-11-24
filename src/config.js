@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { readJson } from './util.js';
+import { openQuestion, readJson, words } from './util.js';
 
 export const CONFIG_FILE = 'specsheet.config.json';
 export const REQUIREMENTS_FILE = 'requirements.json';
@@ -95,9 +95,10 @@ export function loadConfig(dir) {
 
 /**
  * requirements.json:
- * { "requirements": [{ "id": "R1", "text": "...", "source": "stated" | "inferred" }],
- *   "openQuestions": ["..."],
+ * { "requirements": [{ "id": "R1", "text": "...", "source": "stated" | "inferred", "note": "A decision made here" }],
+ *   "openQuestions": [{ "question": "...?", "who": "Who can answer", "default": "What is built if nobody does" }],
  *   "assumed": ["Standard behaviour that is relied on and not written as a scenario"] }
+ * An open question can also be a plain line of text.
  */
 export function loadRequirements(dir) {
   const raw = readJson(path.join(dir, REQUIREMENTS_FILE), { requirements: [], openQuestions: [], assumed: [] });
@@ -109,11 +110,13 @@ export function loadRequirements(dir) {
     if (!['stated', 'inferred'].includes(source)) {
       throw new Error(`${REQUIREMENTS_FILE}: ${item.id} has source "${source}". Use "stated" or "inferred".`);
     }
-    return { id: String(item.id), text: String(item.text), source };
+    return { id: String(item.id), text: String(item.text), source, note: words(item.note) };
   });
+  // An entry with no question text is kept: `specsheet check` says so, and the handoff
+  // leaves it out. It is not worth stopping a run for.
   return {
     requirements,
-    openQuestions: (raw.openQuestions ?? []).map(String),
+    openQuestions: (raw.openQuestions ?? []).map(openQuestion),
     assumed: (raw.assumed ?? []).map(String),
   };
 }

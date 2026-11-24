@@ -44,12 +44,13 @@ flow(
 
 **`flow(name, options, body)`** groups the scenarios for one user flow.
 
-- `states` lists the states each screen needs for this story, including ones the design
-  does not show yet. List a state when the ticket asks for it, the design draws it, or a
-  user would be stuck without it: a screen that loads data needs to say when it is
-  loading, empty or failed, and a form needs to say when the input is wrong and when
-  sending fails. Do not list a state only because a checklist of states has it. Every
-  state here becomes a box in the user flow and, if nothing shows it, a finding.
+- `states` lists the states each screen needs for this story. List a state when the
+  design draws it or the ticket asks for it. A state nobody drew goes in only when the
+  ticket asks for it: "show a spinner while it loads" with no spinner frame is a state
+  the design is missing. Do not add loading, empty or error states because a screen
+  ought to have them or a checklist of states has them. If you think one is truly
+  missing, say so once in your report. Every state here becomes a box in the user flow
+  and, if nothing shows it, a finding.
 - `notApplicable` maps `"screen/state"` to the reason a state does not apply. Use it only
   when the user agrees.
 
@@ -78,7 +79,9 @@ the handoff is built from it.
    template strings, no string joins. The size check reads them as text.
 2. **Put the options before the function.** `step('...', { screen: '...', state: '...' }, async () => { ... })`.
 3. **Every "Then" step needs at least one `expect`.** A "Then" with no check is reported
-   as unverified.
+   as unverified. Import `expect` from `specsheet`, as above, and check the element the
+   step is about with a locator: in the video, the page scrolls to what a passing check
+   looked at, so the result is on screen.
 4. **Check what the user would see.** Use `toBeVisible`, `toContainText`, `toHaveValue`,
    `toBeEnabled` and similar. Never use `waitForTimeout` in place of a check.
 5. **Find elements the way a person would.** Prefer `getByRole`, `getByLabel` and
@@ -96,6 +99,14 @@ the handoff is built from it.
    with `ready`, `submitting`, `card-declined`. Use the same name every time the same
    screen and state appears, in every scenario.
 10. **Do not take screenshots or record anything yourself.** The program does both.
+11. **A step does what its title says, the way a user would do it.** The title is the
+   caption in the video, so the two have to match: "When I open Help from the menu"
+   clicks the Help link in the menu, and the video scrolls to it and shows the click.
+   Use `page.goto` only to open the scenario's starting screen. After that, get from
+   page to page by clicking what a user clicks. A later `page.goto` makes the page jump
+   with nothing pressed, and proves nothing about how the user gets there. Keep it only
+   for a page a user really does open by its address, such as a link from an email, and
+   word the title that way. `specsheet check` notes every later step that does it.
 
 ## Decisions
 
