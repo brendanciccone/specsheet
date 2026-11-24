@@ -30,7 +30,9 @@ function captionHtml(title) {
   const rest = stripKeyword(title);
   const hasKeyword = rest !== title.trim();
   return (
-    '<div style="position:fixed;left:0;right:0;bottom:28px;display:flex;justify-content:center;pointer-events:none">' +
+    '<style>@keyframes specsheet-caption{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}</style>' +
+    '<div style="position:fixed;left:0;right:0;bottom:28px;display:flex;justify-content:center;pointer-events:none;' +
+    'animation:specsheet-caption 180ms ease-out both">' +
     '<div style="max-width:78%;padding:10px 18px;border-radius:10px;background:rgba(29,28,43,0.93);color:#fff;' +
     'font:500 18px/1.35 system-ui,-apple-system,Segoe UI,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,0.28)">' +
     (hasKeyword ? `<span style="color:#F2B45A;font-weight:700">${escapeHtml(keyword)}</span> ` : '') +
@@ -88,14 +90,22 @@ async function movePointer(page, to) {
   const size = page.viewportSize() ?? { width: 1280, height: 720 };
   const state = pointers.get(page) ?? { at: { x: size.width * 0.55, y: size.height * 0.62 }, overlay: null };
   pointers.set(page, state);
+  to ??= state.at;
   const distance = Math.hypot(to.x - state.at.x, to.y - state.at.y);
   const ms = distance < 4 ? 0 : Math.round(Math.min(750, Math.max(260, 180 + distance * 0.55)));
   try {
-    const next = await page.screencast.showOverlay(pointerHtml(state.at, to, ms));
+    if (ms) {
+      const moving = await page.screencast.showOverlay(pointerHtml(state.at, to, ms));
+      await state.overlay?.dispose?.().catch(() => {});
+      state.overlay = moving;
+      await page.waitForTimeout(ms + 60);
+    }
+    // Leave a pointer that does not move. An overlay plays its movement again whenever
+    // the overlays are hidden and shown, as they are around every screenshot.
+    const still = await page.screencast.showOverlay(pointerHtml(to, to, 0));
     await state.overlay?.dispose?.().catch(() => {});
-    state.overlay = next;
+    state.overlay = still;
     state.at = to;
-    if (ms) await page.waitForTimeout(ms + 90);
   } catch {
     // No pointer in the video is not a reason to fail a step.
   }
@@ -103,9 +113,11 @@ async function movePointer(page, to) {
 
 /** Put the pointer back where it was, after a new page or a screenshot took it away. */
 async function restorePointer(page) {
-  const state = pointers.get(page);
-  if (state) await movePointer(page, state.at);
+  await movePointer(page, null);
 }
+
+// Pages still showing the title card of a scenario that has not opened its first page yet.
+const cards = new WeakMap();
 
 /** A ring that spreads from the pointer when it clicks. */
 function clickHtml(point) {
@@ -137,13 +149,27 @@ function humanize(page) {
           const box = element.getBoundingClientRect();
           if (box.top >= 70 && box.bottom <= window.innerHeight - 130) return false;
           element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          return true;
+          // Wait until the page has stopped moving, so the pointer goes to where the
+          // control ends up and nothing is clicked while it is still sliding.
+          return new Promise((resolve) => {
+            const started = performance.now();
+            let last = null;
+            let still = 0;
+            const check = () => {
+              const top = element.getBoundingClientRect().top;
+              still = top === last ? still + 1 : 0;
+              last = top;
+              if (still >= 6 || performance.now() - started > 1400) resolve(true);
+              else requestAnimationFrame(check);
+            };
+            requestAnimationFrame(check);
+          });
         },
         null,
-        { timeout: 1500 },
+        { timeout: 2500 },
       );
       const view = locator.page();
-      if (moved) await view.waitForTimeout(450);
+      if (moved) await view.waitForTimeout(120);
       const box = await locator.boundingBox({ timeout: 1500 });
       if (!box) return;
       const point = options?.position
@@ -312,13 +338,14 @@ export const test = base.extend({
       records.push(record);
 
       const started = Date.now();
-      let caption = pace > 0 ? await showCaption(page, record.title) : null;
+      // The first step runs under the scenario's title card, which stays up until the
+      // first page has loaded, so the video goes from the card straight to the page.
+      const card = cards.get(page) ?? null;
+      const led = pace > 0 && !card && page.url() !== 'about:blank';
+      let caption = pace > 0 && !card ? await showCaption(page, record.title) : null;
       const before = pace > 0 ? page.url() : null;
-      // Say what is about to happen, then do it. On a blank page there is nothing to
-      // look at yet, so the first step starts straight away.
-      if (pace > 0 && before !== 'about:blank') {
-        await page.waitForTimeout(leadTime(record.title, pace)).catch(() => {});
-      }
+      // Say what is about to happen, then do it.
+      if (led) await page.waitForTimeout(leadTime(record.title, pace)).catch(() => {});
       try {
         await base.step(record.title, async () => {
           await body();
@@ -334,10 +361,26 @@ export const test = base.extend({
           // show it again for as long as it takes to read. Otherwise the caption was read
           // before the step, and a short look at the result is enough.
           const moved = page.url() !== before;
-          await caption?.dispose?.().catch(() => {});
-          caption = await showCaption(page, record.title);
+          if (card) {
+            cards.delete(page);
+            // A first step that opened no page would leave the card in its screenshot.
+            if (!moved) {
+              await page
+                .evaluate(() => {
+                  document.documentElement.style.background = '';
+                  document.body.innerHTML = '';
+                })
+                .catch(() => {});
+            }
+          }
+          // The caption stays as it is, so it does not blink. Only a new page needs it
+          // put back, along with the pointer.
+          if (moved || !caption) {
+            await caption?.dispose?.().catch(() => {});
+            caption = await showCaption(page, record.title);
+          }
           if (moved) await restorePointer(page);
-          const acted = record.durationMs - (before !== 'about:blank' ? leadTime(record.title, pace) : 0) > 400;
+          const acted = record.durationMs - (led ? leadTime(record.title, pace) : 0) > 400;
           const hold = moved || !acted ? readingTime(record.title, pace) : Math.max(pace, 900);
           await page.waitForTimeout(hold).catch(() => {});
           await caption?.dispose?.().catch(() => {});
@@ -423,9 +466,20 @@ export function scenario(title, options, body) {
       if (pace > 0) {
         humanize(page);
         // A title card at the start of the video: the scenario's name, then straight on.
-        const card = await page.screencast?.showOverlay?.(titleCardHtml(title, current.count > 1 ? number : null)).catch(() => null);
+        // It is written into the empty page the scenario starts on, so it is what the
+        // video shows until the first step's page replaces it, with nothing in between.
+        const card = await page
+          .evaluate((html) => {
+            document.documentElement.style.background = '#1b1b1f';
+            document.body.innerHTML = html;
+            return true;
+          }, titleCardHtml(title, current.count > 1 ? number : null))
+          .catch(() => false);
         await page.waitForTimeout(Math.min(2600, 1100 + 30 * title.length)).catch(() => {});
-        await card?.dispose?.().catch(() => {});
+        // The pointer is there from the first moment the first page is.
+        if (card) cards.set(page, true);
+        const size = page.viewportSize() ?? { width: 1280, height: 720 };
+        pointers.set(page, { at: { x: size.width * 0.55, y: size.height * 0.62 }, overlay: null });
       }
       await body({ page, step, context, request, testInfo });
     },
