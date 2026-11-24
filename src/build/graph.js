@@ -562,7 +562,7 @@ function edgesSvg(layout, marker) {
     }
     labels.push(
       `<path d="M ${x} ${y - r} L ${x + r} ${y} L ${x} ${y + r} L ${x - r} ${y} Z" class="decision${decision.main ? ' decision-main' : ''}"/>` +
-        `<text x="${x}" y="${y + 0.5}" text-anchor="middle" dominant-baseline="central" class="decision-mark">?</text>` +
+        `<text x="${x + 0.3}" y="${y}" text-anchor="middle" dominant-baseline="central" class="decision-mark">?</text>` +
         decision.lines
           .map((line, index) => {
             const lineY = y - ((decision.lines.length - 1) * 18) / 2 + index * 18;
