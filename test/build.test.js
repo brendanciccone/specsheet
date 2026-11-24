@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { featureText, gherkinLine } from '../src/build/gherkin.js';
-import { buildGraph, layoutGraph, renderFlowSvg } from '../src/build/graph.js';
+import { buildGraph, layoutGraph, renderFlowSvg, textWidth } from '../src/build/graph.js';
 import { commentSections, splitComment } from '../src/build/markdown.js';
 import { buildModel, formatFindings } from '../src/build/model.js';
 import { keywordOf, resolveKeywords, stripKeyword } from '../src/util.js';
@@ -269,6 +269,24 @@ test('user flow: a preview has the shape of its own screenshot', async () => {
     assert.ok(phone.sizes.get('cart/promo').thumb > 300, 'and a taller one');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('user flow: the words of a label are centred in a box that fits them', () => {
+  assert.ok(textWidth('Will it fit', 14) < textWidth('WILL IT FIT', 14), 'capitals are wider');
+  assert.ok(textWidth('illicit', 14) < textWidth('mammoth', 14), 'narrow letters are narrower');
+  assert.ok(textWidth('Yes', 14, true) > textWidth('Yes', 14), 'bold is wider');
+
+  const svg = renderFlowSvg({ meta: { title: 'T', viewports: [viewport] }, flows: [branching()] });
+  const labels = [...svg.matchAll(/<g class="flow-label" data-pad="(\d+)"[^>]*><rect x="([\d.]+)" y="[\d.]+" width="([\d.]+)"[^>]*\/>(.*?)<\/g>/g)];
+  assert.ok(labels.length >= 5);
+  for (const [, pad, x, width, inside] of labels) {
+    const lines = [...inside.matchAll(/<text x="([\d.]+)"[^>]*text-anchor="middle"[^>]*>([^<]*)<\/text>/g)];
+    assert.ok(lines.length >= 1);
+    for (const [, textX, words] of lines) {
+      assert.ok(Math.abs(Number(textX) - (Number(x) + Number(width) / 2)) < 0.01, `"${words}" sits in the middle of its box`);
+      assert.ok(textWidth(words, 14) + 2 * Number(pad) <= Number(width) + 1, `"${words}" fits its box with room either side`);
+    }
   }
 });
 

@@ -3,6 +3,7 @@
 
 import fs from 'node:fs';
 import { clock, escapeHtml, formatBytes, plural, stripKeyword } from '../util.js';
+import { FIT_LABELS } from './graph.js';
 import { gherkinLine, scenarioText, sharedStart, stepLines, uniqueScenarios } from './gherkin.js';
 import {
   ASSUMED_INTRO,
@@ -268,6 +269,8 @@ const VIEW_SCRIPT = `
   var readout = document.querySelector('.flow-zoom');
   var width = drawing.width.baseVal.value;
   var height = drawing.height.baseVal.value;
+  // Fit each label's box to its words in this browser's own font.
+  try { (FIT_LABELS_SOURCE)(drawing); } catch (error) {}
   var view = { scale: 1, x: 0, y: 0 };
   var touched = false;
   var LIMITS = { min: 0.1, max: 4 };
@@ -968,6 +971,6 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
     '<span><span class="lightbox-tip">Click the picture to zoom</span> <button type="button" data-lightbox="close">Close</button></span></div>' +
     '<img alt="" /></div>\n' +
     `<script type="application/json" id="specsheet-markdown">${blob}</script>\n` +
-    `<script>${SCRIPT}</script>\n<script>${VIEW_SCRIPT}</script>\n</body>\n</html>\n`
+    `<script>${SCRIPT}</script>\n<script>${VIEW_SCRIPT.replace('(FIT_LABELS_SOURCE)', FIT_LABELS)}</script>\n</body>\n</html>\n`
   );
 }

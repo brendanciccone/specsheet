@@ -8,7 +8,7 @@ import { escapeHtml, stripKeyword } from '../util.js';
 // on a design canvas.
 const NODE = { wide: 250, narrow: 190, text: 46 };
 // Sizes of the words on the drawing, and the width one character takes at each.
-const TEXT = { label: 14, labelChar: 7.4, labelLine: 17, chip: 13, chipChar: 6.9, name: 16, nameChar: 8.9 };
+const TEXT = { label: 14, labelLine: 17, chip: 13, name: 16 };
 // A preview shows the whole screenshot, in its own proportions, up to this many times its
 // width. Past that it is cut at the bottom and fades out, to say there is more.
 const THUMB = { min: 96, wide: 1.2, narrow: 2.2 };
@@ -188,7 +188,7 @@ function nodeSizes(graph, viewport) {
  */
 export function layoutGraph(graph, viewport) {
   const { width: boxWidth, sizes } = nodeSizes(graph, viewport);
-  const chipRoom = Math.floor((boxWidth - TRUNK - 14) / TEXT.chipChar);
+  const chipRoom = boxWidth - TRUNK - 14;
   const byId = new Map(graph.nodes.map((node) => [node.id, node]));
   const screens = laneOrder(graph, byId);
   const laneOf = (id) => screens.indexOf(byId.get(id).screen);
@@ -239,14 +239,14 @@ export function layoutGraph(graph, viewport) {
         } else if (laneOf(pair.to) > index) {
           forward.push(pair);
         } else {
-          for (const label of pair.labels) chips.get(node.id).push(wrap(`↩ ${label} → ${backText(pair)}`, chipRoom, 3));
+          for (const label of pair.labels) chips.get(node.id).push(wrap(`↩ ${label} → ${backText(pair)}`, chipRoom, TEXT.chip));
         }
       }
       // Decisions come last, so the line down to the other states does not pass through them.
       const questions = [...new Set(out.filter((pair) => pair.decision).map((pair) => pair.decision.question))];
       for (const question of questions) {
         const answers = out.filter((pair) => pair.decision?.question === question);
-        const decision = { from: node.id, question, lines: wrap(question, 30, 3), main: answers.some((pair) => pair.main), branches: [] };
+        const decision = { from: node.id, question, lines: wrap(question, DECISION.width - DECISION.offset - DECISION.radius - 14, 15, { bold: true }), main: answers.some((pair) => pair.main), branches: [] };
         decisions.push(decision);
         rows.push({ kind: 'decision', decision });
         for (const pair of answers) {
@@ -345,13 +345,35 @@ export function layoutGraph(graph, viewport) {
   };
 }
 
-function wrap(text, max, maxLines = 3) {
-  const words = String(text).split(/\s+/);
+// How wide each character is, in thousandths of the font size, for the kind of plain
+// sans-serif the drawing is set in. It is what lets a box be drawn to fit its words
+// without a browser to measure them. Where a browser is at hand, fitLabels corrects it.
+const WIDTHS = { narrow: "ijl|.,:;'!", slim: 'ftrI ()[]/-·"', wide: 'mwMW@', broad: '→↩…' };
+function charWidth(char) {
+  if (WIDTHS.narrow.includes(char)) return 250;
+  if (WIDTHS.slim.includes(char)) return 320;
+  if (WIDTHS.wide.includes(char)) return 860;
+  if (WIDTHS.broad.includes(char)) return 1000;
+  if (char >= 'A' && char <= 'Z') return 680;
+  if (char >= '0' && char <= '9') return 580;
+  return char.charCodeAt(0) > 0x2e7f ? 1000 : 550;
+}
+
+/** About how many pixels a line of text takes at a font size. */
+export function textWidth(text, size, bold = false) {
+  let total = 0;
+  for (const char of String(text)) total += charWidth(char);
+  return (total / 1000) * size * (bold ? 1.06 : 1);
+}
+
+/** Break text into lines no wider than `room` pixels. Past `maxLines`, the last line ends in "…". */
+function wrap(text, room, size, { bold = false, maxLines = 3 } = {}) {
+  const fits = (line) => textWidth(line, size, bold) <= room;
   const lines = [];
   let current = '';
-  for (const word of words) {
+  for (const word of String(text).split(/\s+/)) {
     const candidate = current ? `${current} ${word}` : word;
-    if (candidate.length > max && current) {
+    if (!fits(candidate) && current) {
       lines.push(current);
       current = word;
     } else {
@@ -359,13 +381,36 @@ function wrap(text, max, maxLines = 3) {
     }
   }
   if (current) lines.push(current);
-  if (lines.length > maxLines) {
-    const kept = lines.slice(0, maxLines);
-    kept[maxLines - 1] = `${kept[maxLines - 1].replace(/[.,;:]?$/, '')}…`;
-    return kept;
-  }
-  return lines;
+  const kept = lines.slice(0, maxLines);
+  const cut = (line, more) => {
+    let out = line;
+    while (out.length > 1 && !fits(`${out}${more ? '…' : ''}`)) out = out.slice(0, -1);
+    return out === line && !more ? line : `${out.replace(/[\s.,;:]+$/, '')}…`;
+  };
+  return kept.map((line, index) => cut(line, index === kept.length - 1 && lines.length > maxLines));
 }
+
+/**
+ * Run in a browser, on the drawing: make every label's box fit its words as that browser
+ * draws them, keeping each box centred where it was. The sizes worked out above are close,
+ * and fonts differ from one computer to the next.
+ */
+export const FIT_LABELS = `(function (root) {
+  root.querySelectorAll('g.flow-label').forEach(function (label) {
+    var box = label.querySelector('rect');
+    var lines = label.querySelectorAll('text.edge-label');
+    var widest = 0;
+    lines.forEach(function (line) { widest = Math.max(widest, line.getComputedTextLength()); });
+    if (!box || !widest) return;
+    var width = Math.ceil(widest) + 2 * Number(label.dataset.pad);
+    var left = label.dataset.left ? Number(label.dataset.left) : Number(label.dataset.center) - width / 2;
+    box.setAttribute('x', left);
+    box.setAttribute('width', width);
+    lines.forEach(function (line) { line.setAttribute('x', left + width / 2); });
+    var trail = label.querySelector('text.trail');
+    if (trail) trail.setAttribute('x', left + width + 10);
+  });
+})`;
 
 function dataUri(file) {
   try {
@@ -395,20 +440,36 @@ function route(points, radius = 10) {
   return `${path} L ${end[0]} ${end[1]}`;
 }
 
-/** An action, written on its arrow. `x` is the left edge of the label and `y` its middle. */
-function labelSvg(labels, x, y, max, tone = '', maxLines = 3) {
-  const lines = wrap(labels.join(' / '), max, maxLines);
-  const width = Math.max(...lines.map((line) => line.length)) * TEXT.labelChar + 14;
-  const height = lines.length * TEXT.labelLine + 8;
+const LABEL = { pad: 10, margin: 9 };
+
+/**
+ * An action, written on its arrow: words centred in a box that sits on the line. The box
+ * is centred between `from` and `to`, the ends of the stretch of line it sits on, or
+ * starts at `from` when `to` is not given. `trail` is plain text that follows the box.
+ */
+function labelSvg(labels, y, { from, to = null, room = 170, tone = '', maxLines = 3, trail = '' }) {
+  const space = to === null ? room : Math.max(60, to - from - 2 * LABEL.margin - 2 * LABEL.pad);
+  const lines = wrap(labels.join(' / '), space, TEXT.label, { bold: Boolean(tone), maxLines });
+  const width = Math.ceil(Math.max(...lines.map((line) => textWidth(line, TEXT.label, Boolean(tone))))) + 2 * LABEL.pad;
+  const height = lines.length * TEXT.labelLine + 10;
+  const left = to === null ? from : (from + to) / 2 - width / 2;
+  const center = left + width / 2;
   const auto = labels.length === 1 && labels[0] === AUTO;
+  const place = to === null ? `data-left="${left}"` : `data-center="${center}"`;
   return (
-    `<rect x="${x}" y="${y - height / 2}" width="${width}" height="${height}" rx="6" class="edge-label-box${tone ? ` answer-${tone}` : ''}"/>` +
+    `<g class="flow-label" data-pad="${LABEL.pad}" ${place}>` +
+    `<rect x="${left}" y="${y - height / 2}" width="${width}" height="${height}" rx="8" class="edge-label-box${tone ? ` answer-${tone}` : ''}"/>` +
     lines
       .map((line, index) => {
-        const lineY = y - ((lines.length - 1) * TEXT.labelLine) / 2 + index * TEXT.labelLine;
-        return `<text x="${x + 7}" y="${lineY}" dominant-baseline="central" class="edge-label${auto ? ' edge-label-auto' : ''}${tone ? ` answer-text-${tone}` : ''}">${escapeHtml(line)}</text>`;
+        const lineY = y - ((lines.length - 1) * TEXT.labelLine) / 2 + index * TEXT.labelLine + 0.5;
+        return (
+          `<text x="${center}" y="${lineY}" text-anchor="middle" dominant-baseline="central" ` +
+          `class="edge-label${auto ? ' edge-label-auto' : ''}${tone ? ` answer-text-${tone}` : ''}">${escapeHtml(line)}</text>`
+        );
       })
-      .join('')
+      .join('') +
+    (trail ? `<text x="${left + width + 10}" y="${y + 0.5}" dominant-baseline="central" class="chip trail">${escapeHtml(trail)}</text>` : '') +
+    '</g>'
   );
 }
 
@@ -450,7 +511,7 @@ function edgesSvg(layout, marker) {
     const to = positions.get(pair.to);
     const trunk = from.x + TRUNK;
     draw([[trunk, from.y + tall(pair.from)], [trunk, middle(pair.to)], [to.x - 7, middle(pair.to)]], pair.main);
-    labels.push(labelSvg(pair.labels, trunk + 12, middle(pair.to), 18, '', 4));
+    labels.push(labelSvg(pair.labels, middle(pair.to), { from: trunk, to: to.x - 14, maxLines: 4 }));
   }
 
   // Forward to a later screen: right, along the gap between the lanes, and in from the left.
@@ -468,8 +529,10 @@ function edgesSvg(layout, marker) {
     const spread = Math.min(66, (tall(pair.from) - 24) / list.length);
     const y1 = middle(pair.from) + (list.indexOf(pair) - (list.length - 1) / 2) * spread;
     const x1 = from.x + boxWidth;
-    draw([[x1, y1], ...onward(pair, from.lane, y1)], pair.main);
-    labels.push(labelSvg(pair.labels, x1 + 12, y1, 22));
+    const way = onward(pair, from.lane, y1);
+    draw([[x1, y1], ...way], pair.main);
+    // The label sits in the middle of the first straight stretch, but never far from its state.
+    labels.push(labelSvg(pair.labels, y1, { from: x1, to: Math.min(way[0][0], x1 + GUTTER.label + 40) }));
   }
 
   // Decisions: into the diamond from the state, and out of it once for each answer.
@@ -484,18 +547,17 @@ function edgesSvg(layout, marker) {
       if (branch.kind === 'state') {
         const to = positions.get(pair.to);
         draw([[x, y + r], [x, middle(pair.to)], [to.x - 7, middle(pair.to)]], pair.main);
-        labels.push(labelSvg([branch.answer], x + 12, middle(pair.to), 12, tone(branch.answer)));
+        labels.push(labelSvg([branch.answer], middle(pair.to), { from: x, to: to.x - 14, tone: tone(branch.answer) }));
       } else if (branch.kind === 'forward') {
         draw([[x, y + r], [x, branch.y], ...onward(pair, decision.lane, branch.y)], pair.main);
-        labels.push(labelSvg([branch.answer], x + 12, branch.y, 16, tone(branch.answer)));
+        labels.push(labelSvg([branch.answer], branch.y, { from: x + 12, room: 120, tone: tone(branch.answer) }));
       } else {
-        const lines = wrap(branch.answer, 16);
-        const end = x + 12 + Math.max(...lines.map((line) => line.length)) * TEXT.labelChar + 14;
+        const room = 120;
+        const answer = wrap(branch.answer, room, TEXT.label, { bold: true });
+        const end = x + 12 + Math.max(...answer.map((line) => textWidth(line, TEXT.label, true))) + 2 * LABEL.pad;
         draw([[x, y + r], [x, branch.y], [end + 4, branch.y]], pair.main, false);
-        labels.push(
-          labelSvg([branch.answer], x + 12, branch.y, 16, tone(branch.answer)) +
-            `<text x="${end + 10}" y="${branch.y}" dominant-baseline="central" class="chip">${escapeHtml(wrap(`↩ ${branch.back}`, 30, 1)[0])}</text>`,
-        );
+        const back = wrap(`↩ ${branch.back}`, 200, TEXT.chip, { maxLines: 1 })[0];
+        labels.push(labelSvg([branch.answer], branch.y, { from: x + 12, room, tone: tone(branch.answer), trail: back }));
       }
     }
     labels.push(
@@ -540,10 +602,8 @@ function nodeSvg(node, position, isStart, chips, prefix, hasChildren, size) {
   // The lane names the screen, so the box only names the state.
   const textY = y + 10 + NODE.thumb + 18;
   const name = node.state ?? node.screen;
-  const room = Math.floor((NODE.width - 24 - (isStart ? 52 : 0)) / TEXT.nameChar);
-  parts.push(
-    `<text x="${x + 12}" y="${textY}" dominant-baseline="central" class="node-state">${escapeHtml(name.length > room ? `${name.slice(0, room - 1)}…` : name)}</text>`,
-  );
+  const shown = wrap(name, NODE.width - 24 - (isStart ? 54 : 0), TEXT.name, { bold: true, maxLines: 1 })[0];
+  parts.push(`<text x="${x + 12}" y="${textY}" dominant-baseline="central" class="node-state">${escapeHtml(shown)}</text>`);
   if (isStart) {
     parts.push(
       `<rect x="${x + NODE.width - 56}" y="${textY - 10}" width="44" height="20" rx="10" class="start-pill"/>` +
@@ -628,7 +688,7 @@ export function renderFlowSvg(model, viewportName = model.meta.viewports[0]?.nam
     .start-text { font: 600 12px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #3c3489; }
     .edge { fill: none; stroke: #8f89d6; stroke-width: 1.5; }
     .edge-main { stroke: #4a3fb8; stroke-width: 3; }
-    .edge-label-box { fill: #ffffff; stroke: #cecbf6; }
+    .edge-label-box { fill: #ffffff; stroke: #d6d3f0; }
     .edge-label { font: 400 14px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #26215c; }
     .decision { fill: #fff8e6; stroke: #b98a1e; stroke-width: 1.5; }
     .decision-main { stroke-width: 2.5; }
@@ -669,7 +729,7 @@ export function renderFlowSvg(model, viewportName = model.meta.viewports[0]?.nam
   const legend = legendItems
     .map(([mark, text, offset]) => {
       const item = `<g transform="translate(${legendX} ${legendY})">${mark}<text x="${offset}" y="0" dominant-baseline="central" class="legend">${text}</text></g>`;
-      legendX += offset + text.length * 6.7 + 26;
+      legendX += offset + textWidth(text, 13) + 26;
       return item;
     })
     .join('');

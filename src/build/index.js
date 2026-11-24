@@ -8,7 +8,7 @@ import { launchOptions, loadConfig, loadRequirements } from '../config.js';
 import { readStaticFlows } from '../check.js';
 import { fingerprint, readJson, slug, writeFile } from '../util.js';
 import { featureText } from './gherkin.js';
-import { renderFlowSvg } from './graph.js';
+import { FIT_LABELS, renderFlowSvg } from './graph.js';
 import { checklistMarkdown, commentSections, splitComment } from './markdown.js';
 import { buildModel, formatFindings } from './model.js';
 import { renderPage } from './page.js';
@@ -139,6 +139,8 @@ async function renderPng(svg, file, width, browserName) {
   try {
     const page = await browser.newPage({ viewport: { width: Math.ceil(width), height: 600 }, deviceScaleFactor: 2 });
     await page.setContent(`<body style="margin:0;background:#fff">${svg}</body>`);
+    // Fit each label's box to its words as this browser draws them.
+    await page.evaluate(`${FIT_LABELS}(document)`);
     await page.locator('svg').screenshot({ path: file });
   } finally {
     await browser.close();
