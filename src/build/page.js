@@ -27,13 +27,13 @@ import {
 const STYLE = `
 :root {
   color-scheme: light dark;
-  --ink: #1d1c2b; --muted: #5f5e6e; --line: #dcdbe6; --page: #ffffff; --soft: #f6f5fa;
-  --accent: #4a3fb8; --good: #2f5f0d; --bad: #a32d2d; --warn: #7a4708;
+  --ink: #1a1a1a; --muted: #636363; --line: #dedede; --page: #ffffff; --soft: #f5f5f5;
+  --accent: #1a5fd0; --good: #2f5f0d; --bad: #a32d2d; --warn: #7a4708;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --ink: #eceaf5; --muted: #a9a7b8; --line: #3a3948; --page: #17161f; --soft: #211f2c;
-    --accent: #afa9ec; --good: #b7da8a; --bad: #f4a9a9; --warn: #f3c275;
+    --ink: #ededed; --muted: #a8a8a8; --line: #3a3a3a; --page: #161616; --soft: #222222;
+    --accent: #8ab4f8; --good: #b7da8a; --bad: #f4a9a9; --warn: #f3c275;
   }
 }
 * { box-sizing: border-box; }
@@ -104,7 +104,7 @@ table.facts th { width: 150px; }
 section, article { scroll-margin-top: 12px; }
 details.fold > summary { cursor: pointer; margin-bottom: 10px; color: var(--accent); }
 .scenario-meta { margin: 4px 0 12px; color: var(--muted); font-size: 14px; }
-video.walkthrough { display: block; width: 100%; max-width: 720px; height: auto; margin: 0 0 16px; border: 1px solid var(--line, #dcdbe6); border-radius: 8px; background: var(--soft); aspect-ratio: 16 / 10; object-fit: cover; object-position: top; }
+video.walkthrough { display: block; width: 100%; max-width: 720px; height: auto; margin: 0 0 16px; border: 1px solid var(--line, #dedede); border-radius: 8px; background: var(--soft); aspect-ratio: 16 / 10; object-fit: cover; object-position: top; }
 video.walkthrough[hidden] { display: none; }
 .step { margin: 0 0 6px; }
 .scenario-number { color: var(--muted); font-weight: 600; margin-right: 2px; }
@@ -137,9 +137,9 @@ footer { margin-top: 56px; padding-top: 14px; border-top: 1px solid var(--line);
 .flow-canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 .flow-canvas svg { display: block; }
 .flow-node { cursor: pointer; outline: none; }
-.flow-node:hover > rect:first-of-type, .flow-node:focus-visible > rect:first-of-type { stroke: #534ab7; stroke-width: 3; }
+.flow-node:hover > rect:first-of-type, .flow-node:focus-visible > rect:first-of-type { stroke: #1a1a1a; stroke-width: 2.5; }
 .js article.scenario figure img { cursor: zoom-in; }
-.lightbox { position: fixed; inset: 0; z-index: 10; display: none; overflow: auto; padding: 20px 24px 40px; background: rgba(15, 14, 20, 0.86); }
+.lightbox { position: fixed; inset: 0; z-index: 10; display: none; overflow: auto; padding: 20px 24px 40px; background: rgba(15, 15, 15, 0.86); }
 .lightbox.open { display: block; }
 .lightbox-bar { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 12px;
   max-width: 1200px; margin: 0 auto 14px; color: #fff; font-size: 14px; }

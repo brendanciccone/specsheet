@@ -33,9 +33,9 @@ function captionHtml(title) {
     '<style>@keyframes specsheet-caption{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}</style>' +
     '<div style="position:fixed;left:0;right:0;bottom:28px;display:flex;justify-content:center;pointer-events:none;' +
     'animation:specsheet-caption 180ms ease-out both">' +
-    '<div style="max-width:78%;padding:10px 18px;border-radius:10px;background:rgba(29,28,43,0.93);color:#fff;' +
+    '<div style="max-width:78%;padding:10px 18px;border-radius:10px;background:rgba(24,24,24,0.93);color:#e6e6e6;' +
     'font:500 18px/1.35 system-ui,-apple-system,Segoe UI,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,0.28)">' +
-    (hasKeyword ? `<span style="color:#F2B45A;font-weight:700">${escapeHtml(keyword)}</span> ` : '') +
+    (hasKeyword ? `<span style="color:#fff;font-weight:700">${escapeHtml(keyword)}</span> ` : '') +
     `${escapeHtml(rest)}</div></div>`
   );
 }
@@ -51,9 +51,9 @@ export function readingTime(text, pace) {
 /** The card that opens each scenario in the video: its number and its name, and nothing else. */
 function titleCardHtml(title, number) {
   return (
-    '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#1b1b1f;pointer-events:none">' +
+    '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#1a1a1a;pointer-events:none">' +
     '<div style="max-width:76%;text-align:center;font:600 44px/1.2 system-ui,-apple-system,Segoe UI,sans-serif;color:#fff">' +
-    `${number ? `<span style="color:#9a9aa5">${number}.</span> ` : ''}${escapeHtml(title)}</div></div>`
+    `${number ? `<span style="color:#9a9a9a">${number}.</span> ` : ''}${escapeHtml(title)}</div></div>`
   );
 }
 
@@ -125,7 +125,7 @@ function clickHtml(point) {
   return (
     `<style>@keyframes ${name}{from{transform:scale(.3);opacity:.9}to{transform:scale(1);opacity:0}}</style>` +
     `<div style="position:fixed;left:${Math.round(point.x) - 18}px;top:${Math.round(point.y) - 18}px;width:36px;height:36px;` +
-    `border-radius:50%;border:3px solid #4a3fb8;pointer-events:none;animation:${name} 420ms ease-out both"></div>`
+    `border-radius:50%;border:3px solid rgba(20,20,20,.85);box-shadow:0 0 0 2px rgba(255,255,255,.85);pointer-events:none;animation:${name} 420ms ease-out both"></div>`
   );
 }
 const TYPED = ['text', 'email', 'search', 'tel', 'url', 'password', ''];
@@ -470,7 +470,7 @@ export function scenario(title, options, body) {
         // video shows until the first step's page replaces it, with nothing in between.
         const card = await page
           .evaluate((html) => {
-            document.documentElement.style.background = '#1b1b1f';
+            document.documentElement.style.background = '#1a1a1a';
             document.body.innerHTML = html;
             return true;
           }, titleCardHtml(title, current.count > 1 ? number : null))

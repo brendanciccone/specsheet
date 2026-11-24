@@ -487,7 +487,7 @@ function edgesSvg(layout, marker) {
   const paths = [];
   const labels = [];
   const draw = (points, main, arrow = true) => {
-    paths.push(`<path d="${route(points)}" class="edge${main ? ' edge-main' : ''}"${arrow ? ` marker-end="url(#${marker})"` : ''}/>`);
+    paths.push(`<path d="${route(points)}" class="edge${main ? ' edge-main' : ''}"${arrow ? ` marker-end="url(#${marker}${main ? '-main' : ''})"` : ''}/>`);
   };
   const middle = (id) => positions.get(id).y + tall(id) / 2;
   const turn = (lane, key) => {
@@ -673,34 +673,34 @@ export function renderFlowSvg(model, viewportName = model.meta.viewports[0]?.nam
 
   const style = `
     .bg { fill: #ffffff; }
-    .title { font: 600 20px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1d1c2b; }
-    .subtitle { font: 400 14px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #5f5e6e; }
-    .flow-name { font: 600 15px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1d1c2b; }
-    .lane { fill: #f7f6fb; stroke: #e6e5ef; }
-    .lane-name { font: 600 16px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #3d3c4d; }
-    .node { fill: #ffffff; stroke: #b9b8c6; stroke-width: 1.5; }
-    .node-missing { fill: #fbfbfd; stroke: #8a8998; stroke-dasharray: 6 5; }
-    .thumb-frame { fill: none; stroke: #dcdbe6; }
-    .thumb-empty { fill: #f3f2f8; stroke: #dcdbe6; stroke-dasharray: 4 4; }
-    .thumb-text { font: 400 13px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #5f5e6e; }
-    .node-state { font: 600 16px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1d1c2b; }
-    .start-pill { fill: #eeedfe; }
-    .start-text { font: 600 12px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #3c3489; }
-    .edge { fill: none; stroke: #8f89d6; stroke-width: 1.5; }
-    .edge-main { stroke: #4a3fb8; stroke-width: 3; }
-    .edge-label-box { fill: #ffffff; stroke: #d6d3f0; }
-    .edge-label { font: 400 14px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #26215c; }
+    .title { font: 600 20px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1a1a1a; }
+    .subtitle { font: 400 14px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #636363; }
+    .flow-name { font: 600 15px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1a1a1a; }
+    .lane { fill: #f6f6f6; stroke: #e4e4e4; }
+    .lane-name { font: 600 16px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #333333; }
+    .node { fill: #ffffff; stroke: #bdbdbd; stroke-width: 1.5; }
+    .node-missing { fill: #fbfbfb; stroke: #8c8c8c; stroke-dasharray: 6 5; }
+    .thumb-frame { fill: none; stroke: #dedede; }
+    .thumb-empty { fill: #f1f1f1; stroke: #dedede; stroke-dasharray: 4 4; }
+    .thumb-text { font: 400 13px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #636363; }
+    .node-state { font: 600 16px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1a1a1a; }
+    .start-pill { fill: #e9e9e9; }
+    .start-text { font: 600 12px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #333333; }
+    .edge { fill: none; stroke: #9a9a9a; stroke-width: 1.5; }
+    .edge-main { stroke: #1a1a1a; stroke-width: 3; }
+    .edge-label-box { fill: #ffffff; stroke: #d2d2d2; }
+    .edge-label { font: 400 14px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1a1a1a; }
     .decision { fill: #fff8e6; stroke: #b98a1e; stroke-width: 1.5; }
     .decision-main { stroke-width: 2.5; }
     .decision-mark { font: 700 14px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #7a4708; }
-    .decision-text { font: 600 15px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1d1c2b; }
+    .decision-text { font: 600 15px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1a1a1a; }
     .answer-yes { fill: #e9f6e2; stroke: #5a9a3c; }
     .answer-no { fill: #fdecec; stroke: #c96a6a; }
     .answer-text-yes { fill: #24520d; font-weight: 600; }
     .answer-text-no { fill: #8f2020; font-weight: 600; }
-    .edge-label-auto { font-style: italic; fill: #5f5e6e; }
-    .chip { font: 400 13px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #5f5e6e; }
-    .legend { font: 400 13px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #5f5e6e; }
+    .edge-label-auto { font-style: italic; fill: #636363; }
+    .chip { font: 400 13px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #636363; }
+    .legend { font: 400 13px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #636363; }
   `;
 
   let y = 0;
@@ -742,7 +742,8 @@ export function renderFlowSvg(model, viewportName = model.meta.viewports[0]?.nam
     // Scoped to this drawing, so the rules cannot leak into a page it is placed in.
     `<style>${style.replace(/^(\s*)\./gm, '$1.specsheet-flow .')}</style>` +
     `<defs><linearGradient id="specsheet-fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#fff"/></linearGradient>` +
-    `<marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9 z" fill="#4a3fb8"/></marker></defs>` +
+    `<marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9 z" fill="#9a9a9a"/></marker>` +
+    `<marker id="arrowhead-main" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="10" markerHeight="10" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9 z" fill="#1a1a1a"/></marker></defs>` +
     `<rect class="bg" width="${width}" height="${height}"/>` +
     `<text x="${PAD}" y="${PAD + 10}" dominant-baseline="central" class="title">User flow: ${escapeHtml(model.meta.title)}</text>` +
     `<text x="${PAD}" y="${PAD + 34}" dominant-baseline="central" class="subtitle">${escapeHtml(subtitle)}</text>` +
