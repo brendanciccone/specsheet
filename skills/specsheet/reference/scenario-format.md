@@ -109,7 +109,7 @@ await step('When I pay with a valid card', { screen: 'checkout/payment', state: 
 await step('When I pay with a card the bank declines', { screen: 'checkout/payment', state: 'card-declined', decision: 'Does the bank accept the card?', answer: 'No' }, async () => { ... });
 ```
 
-The user flow then draws the question once, as a diamond under the state both scenarios
+The user flow then draws the question once, in a yellow badge under the state both scenarios
 start from, with a "Yes" branch and a "No" branch. Without it, the flow shows two
 separate arrows and the reader has to work out that they are two outcomes of one thing.
 

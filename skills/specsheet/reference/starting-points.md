@@ -132,8 +132,10 @@ Three things follow from that:
      image is there and is the same one; every piece of text is there, complete, worded
      the same and wrapped the same; sizes, spacing and alignment match; colours and type
      match; nothing is extra.
-   - Fix each difference and compare again. Stop when you find none, not when it looks
-     close.
+   - Fix each difference you can fix under the rules above, and compare again. Stop when
+     no difference is left that you can fix, not when it looks close. Keep the ones you
+     cannot fix, such as a project component that looks different, for the user's review
+     below.
    - Compare once per frame, and once more after fixes. Do not look at the screenshots
      of a run: those you still read as text.
 2. **Then the user reviews it against their design, before the run.** Give them the list

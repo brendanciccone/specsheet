@@ -12,7 +12,7 @@ const TEXT = { label: 14, labelLine: 17, chip: 13, name: 16 };
 // A preview shows the whole screenshot, in its own proportions, up to this many times its
 // width. Past that it is cut at the bottom and fades out, to say there is more.
 const THUMB = { min: 96, wide: 1.2, narrow: 2.2 };
-// A decision: a small diamond with its question beside it, and one branch per answer.
+// A decision: a badge with its question in it, and one branch per answer.
 const DECISION = { offset: 60, radius: 16, pad: 16, row: 64, branch: 40, width: 340 };
 // How far a state sits to the right of the state it branches from. The action is
 // written on that stretch of line, so it has to hold a short label.
@@ -572,7 +572,7 @@ function edgesSvg(layout, marker) {
     labels.push(labelSvg(pair.labels, y1, { from: x1, to: Math.min(way[0][0], x1 + GUTTER.label + 40) }));
   }
 
-  // Decisions: into the diamond from the state, and out of it once for each answer.
+  // Decisions: into the badge from the state, and out of it once for each answer.
   for (const decision of layout.decisions) {
     const from = positions.get(decision.from);
     const trunk = from.x + TRUNK;
@@ -594,14 +594,14 @@ function edgesSvg(layout, marker) {
       } else {
         const room = 120;
         const answer = wrap(branch.answer, room, TEXT.label, { bold: true });
-        const end = x + 12 + Math.max(...answer.map((line) => textWidth(line, TEXT.label, true))) + 2 * LABEL.pad;
+        const end = x + 12 + Math.max(0, ...answer.map((line) => textWidth(line, TEXT.label, true))) + 2 * LABEL.pad;
         draw([[x, y + drop], [x, branch.y], [end + 4, branch.y]], pair.main, false);
         const back = wrap(branch.back, 200, TEXT.chip, { maxLines: 1 })[0];
         labels.push(labelSvg([branch.answer], branch.y, { from: x + 12, room, tone: tone(branch.answer), trail: back }));
       }
     }
     // The question, inside its badge. The badge is a pill when the question is one line.
-    const badge = { left: x - r, width: Math.ceil(Math.max(...decision.lines.map((line) => textWidth(line, 14, true)))) + 2 * DECISION.pad, height: 2 * drop };
+    const badge = { left: x - r, width: Math.ceil(Math.max(0, ...decision.lines.map((line) => textWidth(line, 14, true)))) + 2 * DECISION.pad, height: 2 * drop };
     labels.push(
       `<g class="flow-question" data-left="${badge.left}" data-pad="${DECISION.pad}">` +
         `<rect x="${badge.left}" y="${y - drop}" width="${badge.width}" height="${badge.height}" rx="${decision.lines.length === 1 ? drop : 12}" class="decision"/>` +
