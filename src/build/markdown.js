@@ -58,10 +58,7 @@ export function rebuiltNote(model) {
   const design = model.meta.design;
   if (!design?.rebuilt) return null;
   const label = sourceLabel(design.source);
-  return (
-    `The prototype was rebuilt from the ${label} design. ${label} is the reference for how it looks. ` +
-    'The prototype, videos and screenshots show how it behaves.'
-  );
+  return `The prototype was rebuilt from the ${label} design. ${label} is the reference for how it looks; the prototype shows how it behaves.`;
 }
 
 export function summaryMarkdown(model) {
@@ -97,7 +94,7 @@ export function checklistLines(flow) {
   if (shared.length) lines.push('Every scenario starts with:', ...shared.map((line) => `- ${line}`), '');
   for (const scenario of scenarios) {
     const ids = scenario.covers.length ? ` (${scenario.covers.join(', ')})` : '';
-    lines.push(`- [ ] **${scenario.title}**${ids}`);
+    lines.push(`- [ ] **${scenario.number}. ${scenario.title}**${ids}`);
     for (const line of stepLines(scenario, shared.length)) lines.push(`  - ${line}`);
   }
   return lines;
@@ -109,7 +106,7 @@ export function videoChapterLines(flow) {
   for (const [index, video] of (flow.videos ?? []).entries()) {
     lines.push(`Walkthrough video (${video.viewportLabel}): ${video.file}`);
     for (const scenario of flow.scenarios) {
-      if (scenario.chapter?.index === index) lines.push(`- ${clock(scenario.chapter.start)} ${scenario.title}`);
+      if (scenario.chapter?.index === index) lines.push(`- ${clock(scenario.chapter.start)} ${scenario.number}. ${scenario.title}`);
     }
   }
   return lines;
@@ -121,18 +118,35 @@ export function scenariosMarkdown(flow, model, format = model.meta.format) {
   return chapters.length ? `${text}\n\n${chapters.join('\n')}` : text;
 }
 
-export function statesMarkdown(model) {
+/** The states of each screen on one line: [screen, shown, everything else]. */
+export function stateRows(model) {
   const rows = [];
   for (const flow of model.flows) {
     for (const screen of flow.screens) {
-      for (const state of screen.states) {
-        const status = state.reason ? `${stateStatus(state.status)}: ${state.reason}` : stateStatus(state.status);
-        rows.push(`| ${escapeMarkdown(screen.name)} | ${escapeMarkdown(state.name)} | ${escapeMarkdown(status)} |`);
-      }
+      const shown = screen.states.filter((state) => state.status === 'reached').map((state) => state.name);
+      const rest = screen.states
+        .filter((state) => state.status !== 'reached')
+        .map((state) => ({
+          status: state.status,
+          text: `${state.name}: ${stateStatus(state.status).toLowerCase()}${state.reason ? ` (${state.reason})` : ''}`,
+        }));
+      rows.push({ screen: screen.name, shown, rest });
     }
   }
+  return rows;
+}
+
+export function statesMarkdown(model) {
+  const rows = stateRows(model);
   if (!rows.length) return 'No states were declared.';
-  return ['| Screen | State | Status |', '|---|---|---|', ...rows].join('\n');
+  return [
+    '| Screen | Shown | Missing |',
+    '|---|---|---|',
+    ...rows.map(
+      (row) =>
+        `| ${escapeMarkdown(row.screen)} | ${escapeMarkdown(row.shown.join(', ') || 'None')} | ${escapeMarkdown(row.rest.map((item) => item.text).join('; ') || 'None')} |`,
+    ),
+  ].join('\n');
 }
 
 export function questionsMarkdown(model) {
@@ -140,9 +154,7 @@ export function questionsMarkdown(model) {
   return model.openQuestions.map((question, index) => `${index + 1}. ${question}`).join('\n');
 }
 
-export const ASSUMED_INTRO =
-  'Behaviour the platform or the product already gives, relied on here and not written as scenarios. ' +
-  'Say so if any of it should work differently in this design.';
+export const ASSUMED_INTRO = 'Relied on, not tested.';
 
 export function assumedMarkdown(model) {
   return `${ASSUMED_INTRO}\n\n${model.assumed.map((line) => `- ${line}`).join('\n')}`;

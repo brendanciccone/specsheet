@@ -8,6 +8,14 @@ export interface StepMeta {
   /** The state of that screen after the step, for example "invalid-email". */
   state?: string;
   /**
+   * The question this step answers, when its action can end more than one way, for
+   * example "Is the email valid?". Word it the same in every scenario that answers it.
+   * The user flow draws it once, with one branch per answer.
+   */
+  decision?: string;
+  /** This scenario's answer to `decision`, in a word or two: "Yes", "No". */
+  answer?: string;
+  /**
    * What to screenshot after the step. "page" (the default) is the whole page,
    * "viewport" is only what is visible, for dialogs and other overlays, and
    * "none" takes no screenshot.

@@ -63,6 +63,9 @@ flow(
 - `title` starts with Given, When, Then, And or But.
 - `screen` and `state` name where the step lands. A "When" step names the state its
   action leads to.
+- `decision` and `answer` mark a fork: an action that can end more than one way,
+  depending on something the user or the system decides. Put them on the "When" step.
+  `decision` is the question, `answer` is how this scenario answers it. See "Decisions".
 - `capture` is `'page'` (the default, the whole page), `'viewport'` (only what is
   visible, for dialogs, menus and toasts) or `'none'`.
 
@@ -93,6 +96,30 @@ the handoff is built from it.
    with `ready`, `submitting`, `card-declined`. Use the same name every time the same
    screen and state appears, in every scenario.
 10. **Do not take screenshots or record anything yourself.** The program does both.
+
+## Decisions
+
+When scenarios leave the same screen and state in different directions because of one
+condition, name that condition. Give the "When" step of each of those scenarios the same
+`decision`, worded exactly the same, and its own `answer`:
+
+```js
+await step('When I pay with a valid card', { screen: 'checkout/payment', state: 'paid', decision: 'Does the bank accept the card?', answer: 'Yes' }, async () => { ... });
+// in another scenario
+await step('When I pay with a card the bank declines', { screen: 'checkout/payment', state: 'card-declined', decision: 'Does the bank accept the card?', answer: 'No' }, async () => { ... });
+```
+
+The user flow then draws the question once, as a diamond under the state both scenarios
+start from, with a "Yes" branch and a "No" branch. Without it, the flow shows two
+separate arrows and the reader has to work out that they are two outcomes of one thing.
+
+- Write the question so it can be answered yes or no: "Is the email valid?", "Is the cart
+  empty?", "Does the bank accept the card?". For three or more outcomes, keep each answer
+  to a word or two: "Yes", "Declined", "No answer".
+- Use a decision only for a real fork, where at least two scenarios answer the same
+  question from the same state. Two different things a user may choose to do, such as
+  "open the menu" and "search", are not a decision: leave them as plain actions.
+- The step titles stay as they are. The Gherkin is unchanged.
 
 ## What earns a scenario
 
@@ -152,7 +179,7 @@ The program takes a screenshot after every step. When several steps in a row lan
 same screen and state, the handoff shows the one taken after the last of them, when the
 page has settled and the checks have passed. So a "When" followed by its "Then" share one
 screenshot, shown beside the "Then". The handoff page shows each screen and state once: a
-later step that lands on one shown earlier links back to that picture.
+later step that lands on one shown earlier has a short link back to that picture.
 
 ## Screen sizes
 

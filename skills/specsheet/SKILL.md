@@ -12,32 +12,38 @@ handoff files. No model is involved in a run.
 
 ## Rules that always hold
 
-1. **Never open a screenshot or a video.** You work from text: the code, the ticket and
-   the program's output. This keeps token use low, and the program's text output tells
-   you everything you need.
-2. **Confirm the setup at the start of every run.** Never reuse the screen size from an
+1. **Never open a screenshot or a video of a run.** You work from text: the code, the
+   ticket and the program's output. This keeps token use low, and the program's text
+   output tells you everything you need. The one exception is checking a prototype you
+   rebuilt against its design, once per frame, before the run.
+2. **A rebuilt prototype matches the design exactly.** The same logos, icons, text,
+   sizes and type as the frames, with nothing reworded, cut short, swapped or left out.
+   Check it against each frame yourself before the user reviews it. A prototype that is
+   nearly right does more harm than good. See "Figma" and "When you rebuilt the design"
+   in [reference/starting-points.md](reference/starting-points.md).
+3. **Confirm the setup at the start of every run.** Never reuse the screen size from an
    earlier ticket. A wrong assumption wastes a whole run.
-3. **Never present an inferred requirement as if the ticket said it.** Label every
+4. **Never present an inferred requirement as if the ticket said it.** Label every
    requirement `stated` or `inferred`.
-4. **Lean towards splitting a large story, and never block.** When the size check
+5. **Lean towards splitting a large story, and never block.** When the size check
    warns, recommend a split and say where you would cut it. The user decides, and
    "continue as one" is a fine answer.
-5. **Never write to Jira without showing a preview and getting a yes, every time.**
+6. **Never write to Jira without showing a preview and getting a yes, every time.**
    There is no "don't ask again".
-6. **Never weaken a scenario to make it pass.** A failing step means the prototype and
+7. **Never weaken a scenario to make it pass.** A failing step means the prototype and
    the scenario disagree. That is a finding for the designer, not a bug to hide.
-7. **Do not make design decisions.** When a state, a message or a behaviour is missing,
+8. **Do not make design decisions.** When a state, a message or a behaviour is missing,
    ask the designer. If they have no answer yet, record an open question.
-8. **Leave out what everyone already expects.** A handoff says what this design does,
+9. **Leave out what everyone already expects.** A handoff says what this design does,
    not how browsers and dialogs work. Standard behaviour goes in one "assumed" list, not
    in scenarios. See "What earns a scenario" in
    [reference/scenario-format.md](reference/scenario-format.md).
-9. **Add files; do not change the product's own code.** In a project that holds real
+10. **Add files; do not change the product's own code.** In a project that holds real
    product code, the handoff folder and any prototype you build are new files, on their
    own branch. Never edit, move or delete a file that was there before without the
    user's yes for that file, and never commit or push unless asked. See "Where the
    prototype goes" in [reference/starting-points.md](reference/starting-points.md).
-10. **Never handle a password.** Do not write a password, token or cookie into a scenario
+11. **Never handle a password.** Do not write a password, token or cookie into a scenario
    file, the config or the conversation, and do not ask the user to paste one. See
    "Screens behind a sign-in" in [reference/scenario-format.md](reference/scenario-format.md).
 
@@ -59,7 +65,7 @@ This skill needs Specsheet 0.3.0 or later.
 2. Check `node --version` is 22 or later. If it is not, tell the user to install a newer
    Node from nodejs.org, and stop.
 3. If the project is a git repository and you are on its main branch, ask to create a
-   branch for the handoff first, for example `handoff/<ticket-key>` (rule 9).
+   branch for the handoff first, for example `handoff/<ticket-key>` (rule 10).
 4. Ask once: "Specsheet needs its program in this project and a browser to run the
    scenarios in. I'll run these two commands. The first adds a dev dependency to
    package.json and the lockfile. OK?" and show them:
@@ -180,16 +186,27 @@ step. Follow [reference/starting-points.md](reference/starting-points.md).
 
 Before you write any prototype code, read "Where the prototype goes" in that file: in a
 product's codebase the prototype is new files on a branch, and existing code stays as it
-is (rule 9).
+is (rule 10).
 
-When you built or changed the prototype, list the files you added and ask the user to
-review it before you go on. From here on, the prototype is what gets tested.
+When you rebuilt a design, it has to match the frames exactly (rule 2): the real logos
+and icons from the file, every piece of text word for word and not cut short, the same
+sizes and type. Compare each screen with its frame yourself and fix every difference
+before you show it to anyone.
+
+When you built or changed the prototype, list the files you added, say what you compared
+and what still differs, and ask the user to review it before you go on. From here on,
+the prototype is what gets tested.
 
 ### 6. Write the scenarios
 
 One scenario file per flow, in `handoff/<TICKET-KEY>/scenarios/`. Follow
 [reference/scenario-format.md](reference/scenario-format.md) exactly: the size check and
 the handoff files are built from the text of these files.
+
+Where scenarios part ways over one condition (valid or not, found or not, accepted or
+declined), give those "When" steps the same `decision` question and each its own
+`answer`. The user flow then shows it as a yes/no fork. See "Decisions" in the scenario
+format.
 
 Word a step that every scenario opens with, such as "Given I am on the Help page",
 exactly the same in each. The handoff then says it once, as a Gherkin `Background`,
@@ -203,7 +220,7 @@ npx specsheet check handoff/<TICKET-KEY>
 
 It warns above 12 scenarios or 8 screens, and its notes say which flows and which
 requirements hold the most scenarios. On a `WARNING`, first look for scenarios that should
-not be there: standard behaviour (rule 8), and two scenarios that prove the same thing.
+not be there: standard behaviour (rule 9), and two scenarios that prove the same thing.
 Then show the warning and recommend a split along the lines its notes give. A separate
 story is a separate handoff folder. If the user wants to continue as one, do.
 

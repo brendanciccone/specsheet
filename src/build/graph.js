@@ -4,7 +4,12 @@
 import fs from 'node:fs';
 import { escapeHtml, stripKeyword } from '../util.js';
 
-const NODE = { width: 220, height: 172, thumb: 128 };
+const NODE = { width: 220, text: 44 };
+// The preview keeps the shape of the screen it shows, within these heights, so a phone
+// screen is drawn tall and a desktop one wide.
+const THUMB = { min: 110, max: 300 };
+// A decision: a small diamond with its question beside it, and one branch per answer.
+const DECISION = { offset: 60, radius: 15, row: 56, branch: 36, width: 310 };
 // How far a state sits to the right of the state it branches from. The action is
 // written on that stretch of line, so it has to hold a short label.
 const INDENT = 196;
@@ -38,6 +43,7 @@ export function buildGraph(flow, viewportName) {
     if (viewportName && scenario.viewport?.name !== viewportName) continue;
     let previous = null;
     let action = null;
+    let choice = null;
     let used = false;
     let complete = true;
     const path = { nodes: [], edges: [] };
@@ -48,6 +54,7 @@ export function buildGraph(flow, viewportName) {
       }
       if (step.resolvedKeyword === 'When') {
         action = stripKeyword(step.title);
+        choice = step.decision && step.answer ? { question: step.decision, answer: step.answer } : null;
         used = false;
       }
       if (!step.screen) continue;
@@ -57,9 +64,10 @@ export function buildGraph(flow, viewportName) {
         // One action explains one arrow. A later change with no new action is the
         // prototype moving on by itself, such as "sending" turning into "sent".
         const label = action && !used ? action : action ? AUTO : stripKeyword(step.title);
+        const decision = action && !used ? choice : null;
         used = true;
         const key = `${previous.id}→${node.id}→${label}`;
-        if (!edges.has(key)) edges.set(key, { from: previous.id, to: node.id, label, main: false });
+        if (!edges.has(key)) edges.set(key, { from: previous.id, to: node.id, label, main: false, decision });
         path.edges.push(key);
       }
       if (path.nodes[path.nodes.length - 1] !== node.id) path.nodes.push(node.id);
@@ -130,14 +138,24 @@ function laneOrder(graph, byId) {
   return order;
 }
 
+/** The size of a state's box. The preview takes the proportions of the screen size. */
+function nodeSize(viewport) {
+  const inner = NODE.width - 20;
+  const ratio = viewport?.width && viewport?.height ? viewport.height / viewport.width : 0.64;
+  const thumb = Math.round(Math.min(THUMB.max, Math.max(THUMB.min, inner * ratio)));
+  return { width: NODE.width, thumb, height: thumb + NODE.text };
+}
+
 /**
  * One lane per screen, left to right. Inside a lane the states form a tree: the state a
  * visitor arrives on at the top, and each state it can turn into indented below it, the
- * way folders are drawn. Arrows only ever run forward. An action that goes back, such as
- * closing a dialog or returning to an earlier screen, is a line of text under its state,
- * so a busy flow does not become a knot of crossing lines.
+ * way folders are drawn. Where the scenarios name a decision, its question is drawn once
+ * and each answer is a branch. Arrows only ever run forward. An action that goes back,
+ * such as closing a dialog or returning to an earlier screen, is a line of text under its
+ * state, so a busy flow does not become a knot of crossing lines.
  */
-export function layoutGraph(graph) {
+export function layoutGraph(graph, viewport) {
+  const size = nodeSize(viewport);
   const byId = new Map(graph.nodes.map((node) => [node.id, node]));
   const screens = laneOrder(graph, byId);
   const laneOf = (id) => screens.indexOf(byId.get(id).screen);
@@ -146,60 +164,85 @@ export function layoutGraph(graph) {
   const pairs = new Map();
   for (const edge of graph.edges) {
     const key = `${edge.from}→${edge.to}`;
-    if (!pairs.has(key)) pairs.set(key, { from: edge.from, to: edge.to, labels: [], main: false });
+    if (!pairs.has(key)) pairs.set(key, { from: edge.from, to: edge.to, labels: [], main: false, decision: null });
     const pair = pairs.get(key);
     if (!pair.labels.includes(edge.label)) pair.labels.push(edge.label);
     pair.main ||= edge.main;
+    pair.decision ??= edge.decision ?? null;
   }
+  const leavingFrom = (id) => [...pairs.values()].filter((pair) => pair.from === id);
+  const backText = (pair) => {
+    const target = byId.get(pair.to);
+    return target.screen === byId.get(pair.from).screen ? target.state ?? target.screen : [target.screen, target.state].filter(Boolean).join(' · ');
+  };
 
-  // The tree inside each lane.
+  // The tree inside each lane, as rows from top to bottom: states, decisions, and the
+  // answers of a decision that lead out of the lane or back.
   const depth = new Map();
   const parent = new Map();
+  const tree = [];
+  const forward = [];
+  const decisions = [];
+  const chips = new Map(graph.nodes.map((node) => [node.id, []]));
   const lanes = screens.map((screen, index) => {
     const members = graph.nodes.filter((node) => node.screen === screen);
     const shown = members.filter((node) => !node.missing);
-    const inside = [...pairs.values()].filter((pair) => laneOf(pair.from) === index && laneOf(pair.to) === index);
-    const ordered = [];
+    const rows = [];
     const visit = (node, level) => {
       depth.set(node.id, level);
-      ordered.push(node);
-      const children = inside
-        .filter((pair) => pair.from === node.id && !depth.has(pair.to))
-        .map((pair) => byId.get(pair.to))
-        .sort((a, b) => Number(b.main) - Number(a.main) || a.order - b.order);
+      rows.push({ kind: 'node', node });
+      const out = leavingFrom(node.id).sort((a, b) => Number(b.main) - Number(a.main) || byId.get(a.to).order - byId.get(b.to).order);
       // Claim the children first, so a state is drawn under the nearest state that leads to it.
-      const mine = children.filter((child) => !depth.has(child.id));
-      for (const child of mine) {
-        depth.set(child.id, level + 1);
-        parent.set(child.id, node.id);
+      const mine = out.filter((pair) => laneOf(pair.to) === index && !depth.has(pair.to));
+      for (const pair of mine) {
+        depth.set(pair.to, level + 1);
+        parent.set(pair.to, node.id);
       }
-      for (const child of mine) visit(child, level + 1);
+      const plain = out.filter((pair) => !pair.decision);
+      for (const pair of plain) {
+        if (mine.includes(pair)) {
+          tree.push(pair);
+          visit(byId.get(pair.to), level + 1);
+        } else if (laneOf(pair.to) > index) {
+          forward.push(pair);
+        } else {
+          for (const label of pair.labels) chips.get(node.id).push(wrap(`↩ ${label} → ${backText(pair)}`, 31, 3));
+        }
+      }
+      // Decisions come last, so the line down to the other states does not pass through them.
+      const questions = [...new Set(out.filter((pair) => pair.decision).map((pair) => pair.decision.question))];
+      for (const question of questions) {
+        const answers = out.filter((pair) => pair.decision?.question === question);
+        const decision = { from: node.id, question, lines: wrap(question, 32, 3), main: answers.some((pair) => pair.main), branches: [] };
+        decisions.push(decision);
+        rows.push({ kind: 'decision', decision });
+        for (const pair of answers) {
+          const branch = { pair, answer: pair.decision.answer, kind: 'state' };
+          decision.branches.push(branch);
+          if (mine.includes(pair)) {
+            visit(byId.get(pair.to), level + 1);
+            continue;
+          }
+          branch.kind = laneOf(pair.to) > index ? 'forward' : 'back';
+          if (branch.kind === 'forward') forward.push(pair);
+          else branch.back = backText(pair);
+          pair.branch = branch;
+          rows.push({ kind: 'branch', branch });
+        }
+      }
     };
     const entry = (node) => (node.main ? 0 : graph.starts.includes(node.id) ? 1 : 2);
     for (const root of [...shown].sort((a, b) => entry(a) - entry(b) || a.order - b.order)) {
       if (!depth.has(root.id)) visit(root, 0);
     }
-    const deepest = Math.max(0, ...ordered.map((node) => depth.get(node.id)));
+    const deepest = Math.max(0, ...shown.map((node) => depth.get(node.id)));
     for (const node of members.filter((item) => item.missing)) {
       depth.set(node.id, Math.min(1, deepest));
-      ordered.push(node);
+      rows.push({ kind: 'node', node });
     }
-    return { screen, index, nodes: ordered, depth: deepest };
+    const asks = rows.some((row) => row.kind === 'decision');
+    return { screen, index, rows, width: Math.max(size.width + deepest * INDENT, asks ? DECISION.width : 0) };
   });
-
-  // Sort every arrow: down the tree, forward to a later screen, or back.
-  const tree = [];
-  const forward = [];
-  const chips = new Map(graph.nodes.map((node) => [node.id, []]));
-  for (const pair of pairs.values()) {
-    if (parent.get(pair.to) === pair.from) tree.push(pair);
-    else if (laneOf(pair.to) > laneOf(pair.from)) forward.push(pair);
-    else {
-      const target = byId.get(pair.to);
-      const where = target.screen === byId.get(pair.from).screen ? target.state ?? target.screen : [target.screen, target.state].filter(Boolean).join(' · ');
-      for (const label of pair.labels) chips.get(pair.from).push(wrap(`↩ ${label} → ${where}`, 31, 3));
-    }
-  }
 
   // Arrows that pass over a whole screen travel above the lanes, each at its own height.
   const skips = forward.filter((pair) => laneOf(pair.to) - laneOf(pair.from) > 1);
@@ -222,28 +265,44 @@ export function layoutGraph(graph) {
   let x = PAD;
   let bottom = top;
   lanes.forEach((lane, index) => {
-    const width = NODE.width + lane.depth * INDENT;
     let y = top + LANE.head;
-    for (const node of lane.nodes) {
-      const lines = chips.get(node.id).reduce((sum, chip) => sum + chip.length, 0);
-      const extra = lines ? lines * CHIP.line + chips.get(node.id).length * 3 + CHIP.pad : 0;
-      positions.set(node.id, { x: x + LANE.pad + depth.get(node.id) * INDENT, y, lane: index, column: index, depth: depth.get(node.id) });
-      y += NODE.height + extra + LANE.gap;
-    }
-    const height = y - LANE.gap + LANE.pad - top;
-    bands.push({ screen: lane.screen, x, y: top, width: width + LANE.pad * 2, height });
+    lane.rows.forEach((row, at) => {
+      const next = lane.rows[at + 1];
+      if (row.kind === 'node') {
+        const { node } = row;
+        const lines = chips.get(node.id).reduce((sum, chip) => sum + chip.length, 0);
+        const extra = lines ? lines * CHIP.line + chips.get(node.id).length * 3 + CHIP.pad : 0;
+        positions.set(node.id, { x: x + LANE.pad + depth.get(node.id) * INDENT, y, lane: index, column: index, depth: depth.get(node.id) });
+        y += size.height + extra + (next && next.kind !== 'node' ? 8 : LANE.gap);
+      } else if (row.kind === 'decision') {
+        const from = positions.get(row.decision.from);
+        row.decision.x = from.x + DECISION.offset;
+        row.decision.y = y + DECISION.row / 2;
+        row.decision.lane = index;
+        y += DECISION.row;
+      } else {
+        row.branch.y = y + DECISION.branch / 2;
+        y += DECISION.branch + (next && next.kind === 'branch' ? 0 : LANE.gap - 8);
+      }
+      if (!next) y += row.kind === 'node' ? 0 : 8;
+    });
+    const last = lane.rows[lane.rows.length - 1];
+    const height = y - (last?.kind === 'node' ? LANE.gap : 0) + LANE.pad - top;
+    bands.push({ screen: lane.screen, x, y: top, width: lane.width + LANE.pad * 2, height });
     bottom = Math.max(bottom, top + height);
-    x += width + LANE.pad * 2 + GUTTER.lane + GUTTER.label + channels[index].length * 12 + GUTTER.stub;
+    x += lane.width + LANE.pad * 2 + GUTTER.lane + GUTTER.label + channels[index].length * 12 + GUTTER.stub;
   });
   const last = bands[bands.length - 1];
   for (const band of bands) band.height = bottom - top;
 
   return {
+    size,
     positions,
     bands,
     tree,
     forward,
     skips,
+    decisions,
     chips,
     channels,
     top,
@@ -303,29 +362,51 @@ function route(points, radius = 10) {
 }
 
 /** An action, written on its arrow. `x` is the left edge of the label and `y` its middle. */
-function labelSvg(labels, x, y, max) {
+function labelSvg(labels, x, y, max, tone = '') {
   const lines = wrap(labels.join(' / '), max);
   const width = Math.max(...lines.map((line) => line.length)) * 6.3 + 14;
   const height = lines.length * 15 + 8;
   const auto = labels.length === 1 && labels[0] === AUTO;
   return (
-    `<rect x="${x}" y="${y - height / 2}" width="${width}" height="${height}" rx="6" class="edge-label-box"/>` +
+    `<rect x="${x}" y="${y - height / 2}" width="${width}" height="${height}" rx="6" class="edge-label-box${tone ? ` answer-${tone}` : ''}"/>` +
     lines
       .map((line, index) => {
         const lineY = y - ((lines.length - 1) * 15) / 2 + index * 15;
-        return `<text x="${x + 7}" y="${lineY}" dominant-baseline="central" class="edge-label${auto ? ' edge-label-auto' : ''}">${escapeHtml(line)}</text>`;
+        return `<text x="${x + 7}" y="${lineY}" dominant-baseline="central" class="edge-label${auto ? ' edge-label-auto' : ''}${tone ? ` answer-text-${tone}` : ''}">${escapeHtml(line)}</text>`;
       })
       .join('')
   );
 }
 
+/** A "Yes" answer is green and a "No" answer is red. Any other answer keeps the plain colour. */
+function tone(answer) {
+  if (/^(yes|true|ok)\b/i.test(answer.trim())) return 'yes';
+  if (/^(no|false)\b/i.test(answer.trim())) return 'no';
+  return '';
+}
+
 /** Every arrow of a flow, and the labels that sit on them. */
 function edgesSvg(layout, marker) {
-  const { positions } = layout;
+  const { positions, size } = layout;
   const paths = [];
   const labels = [];
-  const draw = (points, pair) => {
-    paths.push(`<path d="${route(points)}" class="edge${pair.main ? ' edge-main' : ''}" marker-end="url(#${marker})"/>`);
+  const draw = (points, main, arrow = true) => {
+    paths.push(`<path d="${route(points)}" class="edge${main ? ' edge-main' : ''}"${arrow ? ` marker-end="url(#${marker})"` : ''}/>`);
+  };
+  const middle = (id) => positions.get(id).y + size.height / 2;
+  const turn = (lane, key) => {
+    const side = layout.bands[lane];
+    return side.x + side.width + GUTTER.lane + GUTTER.label + 8 + layout.channels[lane].indexOf(key) * 12;
+  };
+  /** The rest of the way to a state in a later lane, from a point on the way out of this one. */
+  const onward = (pair, lane, y1) => {
+    const to = positions.get(pair.to);
+    const y2 = middle(pair.to);
+    const into = turn(to.lane - 1, `in:${pair.to}`);
+    if (to.lane - lane === 1) return [[into, y1], [into, y2], [to.x - 7, y2]];
+    const up = turn(lane, `up:${pair.from}→${pair.to}`);
+    const above = layout.top - 12 - layout.skips.indexOf(pair) * 14;
+    return [[up, y1], [up, above], [into, above], [into, y2], [to.x - 7, y2]];
   };
 
   // Down the tree: out of the bottom of a state, then right into the state it becomes.
@@ -333,52 +414,74 @@ function edgesSvg(layout, marker) {
     const from = positions.get(pair.from);
     const to = positions.get(pair.to);
     const trunk = from.x + TRUNK;
-    const y = to.y + NODE.height / 2;
-    draw([[trunk, from.y + NODE.height], [trunk, y], [to.x - 7, y]], pair);
-    labels.push(labelSvg(pair.labels, trunk + 12, y, 20));
+    draw([[trunk, from.y + size.height], [trunk, middle(pair.to)], [to.x - 7, middle(pair.to)]], pair.main);
+    labels.push(labelSvg(pair.labels, trunk + 12, middle(pair.to), 20));
   }
 
   // Forward to a later screen: right, along the gap between the lanes, and in from the left.
+  const plain = layout.forward.filter((pair) => !pair.branch);
   const leaving = new Map();
-  for (const pair of layout.forward) leaving.set(pair.from, [...(leaving.get(pair.from) ?? []), pair]);
+  for (const pair of plain) leaving.set(pair.from, [...(leaving.get(pair.from) ?? []), pair]);
   // An arrow that passes over a screen leaves from the top, since it climbs above the lanes.
   const over = (pair) => (positions.get(pair.to).lane - positions.get(pair.from).lane > 1 ? 0 : 1);
   for (const list of leaving.values()) {
     list.sort((a, b) => over(a) - over(b) || positions.get(a.to).y - positions.get(b.to).y || Number(b.main) - Number(a.main));
   }
-
-  for (const pair of layout.forward) {
+  for (const pair of plain) {
     const from = positions.get(pair.from);
-    const to = positions.get(pair.to);
-    const band = layout.bands[from.lane];
-    const edge = band.x + band.width + GUTTER.lane + GUTTER.label;
-    const turn = (lane, key) => {
-      const side = layout.bands[lane];
-      return side.x + side.width + GUTTER.lane + GUTTER.label + 8 + layout.channels[lane].indexOf(key) * 12;
-    };
     const list = leaving.get(pair.from);
-    const spread = Math.min(56, (NODE.height - 24) / list.length);
-    const y1 = from.y + NODE.height / 2 + (list.indexOf(pair) - (list.length - 1) / 2) * spread;
-    const y2 = to.y + NODE.height / 2;
-    const x1 = from.x + NODE.width;
-    const x2 = to.x - 7;
-    const into = turn(to.lane - 1, `in:${pair.to}`);
-    if (to.lane - from.lane === 1) {
-      draw([[x1, y1], [into, y1], [into, y2], [x2, y2]], pair);
-    } else {
-      const up = turn(from.lane, `up:${pair.from}→${pair.to}`);
-      const above = layout.top - 12 - layout.skips.indexOf(pair) * 14;
-      draw([[x1, y1], [up, y1], [up, above], [into, above], [into, y2], [x2, y2]], pair);
+    const spread = Math.min(56, (size.height - 24) / list.length);
+    const y1 = middle(pair.from) + (list.indexOf(pair) - (list.length - 1) / 2) * spread;
+    const x1 = from.x + size.width;
+    draw([[x1, y1], ...onward(pair, from.lane, y1)], pair.main);
+    labels.push(labelSvg(pair.labels, x1 + 12, y1, 24));
+  }
+
+  // Decisions: into the diamond from the state, and out of it once for each answer.
+  for (const decision of layout.decisions) {
+    const from = positions.get(decision.from);
+    const trunk = from.x + TRUNK;
+    const { x, y } = decision;
+    const r = DECISION.radius;
+    draw([[trunk, from.y + size.height], [trunk, y], [x - r, y]], decision.main, false);
+    for (const branch of decision.branches) {
+      const { pair } = branch;
+      if (branch.kind === 'state') {
+        const to = positions.get(pair.to);
+        draw([[x, y + r], [x, middle(pair.to)], [to.x - 7, middle(pair.to)]], pair.main);
+        labels.push(labelSvg([branch.answer], x + 12, middle(pair.to), 13, tone(branch.answer)));
+      } else if (branch.kind === 'forward') {
+        draw([[x, y + r], [x, branch.y], ...onward(pair, decision.lane, branch.y)], pair.main);
+        labels.push(labelSvg([branch.answer], x + 12, branch.y, 16, tone(branch.answer)));
+      } else {
+        const lines = wrap(branch.answer, 16);
+        const end = x + 12 + Math.max(...lines.map((line) => line.length)) * 6.3 + 14;
+        draw([[x, y + r], [x, branch.y], [end + 4, branch.y]], pair.main, false);
+        labels.push(
+          labelSvg([branch.answer], x + 12, branch.y, 16, tone(branch.answer)) +
+            `<text x="${end + 10}" y="${branch.y}" dominant-baseline="central" class="chip">${escapeHtml(wrap(`↩ ${branch.back}`, 30, 1)[0])}</text>`,
+        );
+      }
     }
-    labels.push(labelSvg(pair.labels, Math.min(x1 + 12, edge - GUTTER.label + 4), y1, 24));
+    labels.push(
+      `<path d="M ${x} ${y - r} L ${x + r} ${y} L ${x} ${y + r} L ${x - r} ${y} Z" class="decision${decision.main ? ' decision-main' : ''}"/>` +
+        `<text x="${x}" y="${y + 0.5}" text-anchor="middle" dominant-baseline="central" class="decision-mark">?</text>` +
+        decision.lines
+          .map((line, index) => {
+            const lineY = y - ((decision.lines.length - 1) * 15) / 2 + index * 15;
+            return `<text x="${x + r + 9}" y="${lineY}" dominant-baseline="central" class="decision-text">${escapeHtml(line)}</text>`;
+          })
+          .join(''),
+    );
   }
 
   // Every line is drawn before any label, so a label is never hidden behind a line.
   return paths.join('') + labels.join('');
 }
 
-function nodeSvg(node, position, isStart, chips, prefix, hasChildren) {
+function nodeSvg(node, position, isStart, chips, prefix, hasChildren, size) {
   const { x, y } = position;
+  const NODE = size;
   const inner = NODE.width - 20;
   const parts = [];
   parts.push(`<rect x="${x}" y="${y}" width="${NODE.width}" height="${NODE.height}" rx="12" class="${node.missing ? 'node node-missing' : 'node'}"/>`);
@@ -441,8 +544,10 @@ function flowSvg(graph, layout, prefix, marker) {
         `<text x="${band.x + LANE.pad}" y="${band.y + LANE.head / 2 + 1}" dominant-baseline="central" class="lane-name">${escapeHtml(band.screen)}</text>`,
     )
     .join('');
+  // A state with something below it has a line leaving its bottom edge.
+  const hangs = new Set([...layout.tree.map((pair) => pair.from), ...layout.decisions.map((decision) => decision.from)]);
   const nodes = graph.nodes
-    .map((node) => nodeSvg(node, layout.positions.get(node.id), graph.starts.includes(node.id), layout.chips.get(node.id), prefix, layout.tree.some((pair) => pair.from === node.id)))
+    .map((node) => nodeSvg(node, layout.positions.get(node.id), graph.starts.includes(node.id), layout.chips.get(node.id), prefix, hangs.has(node.id), layout.size))
     .join('');
   return bands + edgesSvg(layout, marker) + nodes;
 }
@@ -452,10 +557,9 @@ export function renderFlowSvg(model, viewportName = model.meta.viewports[0]?.nam
   const viewport = model.meta.viewports.find((item) => item.name === viewportName);
   const drawings = model.flows.map((flow) => {
     const graph = buildGraph(flow, viewportName);
-    return { graph, layout: layoutGraph(graph) };
+    return { graph, layout: layoutGraph(graph, viewport) };
   });
   const many = drawings.length > 1;
-  const width = Math.max(560, ...drawings.map((item) => item.layout.width));
   const subtitle = [
     many ? `${drawings.length} flows` : model.flows[0]?.name,
     viewport ? `${viewport.name}, ${viewport.width} × ${viewport.height}` : null,
@@ -465,7 +569,11 @@ export function renderFlowSvg(model, viewportName = model.meta.viewports[0]?.nam
   const all = drawings.flatMap((item) => item.graph.nodes);
   const hasMissing = all.some((node) => node.missing);
   const hasMain = drawings.some((item) => item.graph.mainPath.length);
-  const hasBack = drawings.some((item) => [...item.layout.chips.values()].some((list) => list.length));
+  const hasBack = drawings.some(
+    (item) =>
+      [...item.layout.chips.values()].some((list) => list.length) ||
+      item.layout.decisions.some((decision) => decision.branches.some((branch) => branch.kind === 'back')),
+  );
 
   const style = `
     .bg { fill: #ffffff; }
@@ -486,6 +594,14 @@ export function renderFlowSvg(model, viewportName = model.meta.viewports[0]?.nam
     .edge-main { stroke: #4a3fb8; stroke-width: 3; }
     .edge-label-box { fill: #ffffff; stroke: #cecbf6; }
     .edge-label { font: 400 12px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #26215c; }
+    .decision { fill: #fff8e6; stroke: #b98a1e; stroke-width: 1.5; }
+    .decision-main { stroke-width: 2.5; }
+    .decision-mark { font: 700 13px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #7a4708; }
+    .decision-text { font: 600 13px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1d1c2b; }
+    .answer-yes { fill: #e9f6e2; stroke: #5a9a3c; }
+    .answer-no { fill: #fdecec; stroke: #c96a6a; }
+    .answer-text-yes { fill: #24520d; font-weight: 600; }
+    .answer-text-no { fill: #8f2020; font-weight: 600; }
     .edge-label-auto { font-style: italic; fill: #5f5e6e; }
     .chip { font: 400 12px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #5f5e6e; }
     .legend { font: 400 12px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #5f5e6e; }
@@ -504,10 +620,14 @@ export function renderFlowSvg(model, viewportName = model.meta.viewports[0]?.nam
     .join('');
   const height = y;
   const legendY = height - PAD + 4;
+  let width = Math.max(560, ...drawings.map((item) => item.layout.width));
 
   const legendItems = [['<rect x="0" y="-7" width="22" height="14" rx="4" class="node"/>', 'Shown in a scenario', 30]];
   if (hasMissing) legendItems.push(['<rect x="0" y="-7" width="22" height="14" rx="4" class="node node-missing"/>', 'Needed, but not shown or failing', 30]);
   if (hasMain) legendItems.push(['<path d="M0 0 H22" class="edge edge-main"/>', 'The main path', 30]);
+  if (drawings.some((item) => item.layout.decisions.length)) {
+    legendItems.push(['<path d="M11 -8 L19 0 L11 8 L3 0 Z" class="decision"/>', 'A decision, with one branch per answer', 30]);
+  }
   if (hasBack) legendItems.push(['<text x="0" y="0" dominant-baseline="central" class="chip">↩</text>', 'Goes back to a state already shown', 16]);
   let legendX = PAD;
   const legend = legendItems
@@ -517,6 +637,8 @@ export function renderFlowSvg(model, viewportName = model.meta.viewports[0]?.nam
       return item;
     })
     .join('');
+  // A narrow drawing is widened to hold its legend.
+  width = Math.max(width, Math.ceil(legendX - 26 + PAD));
 
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" class="specsheet-flow" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img">` +

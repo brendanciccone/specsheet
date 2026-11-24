@@ -104,6 +104,16 @@ export function buildModel({ results, config, requirements, openQuestions, assum
     flow.scenarios.push(buildScenario(raw, staticByKey.get(`${raw.flow}::${raw.title}`)));
   }
 
+  // Number the scenarios of each flow, so they can be referred to and found quickly.
+  // A scenario run at two screen sizes keeps one number.
+  for (const flow of flows) {
+    const numbers = new Map();
+    for (const scenario of flow.scenarios) {
+      if (!numbers.has(scenario.title)) numbers.set(scenario.title, numbers.size + 1);
+      scenario.number = numbers.get(scenario.title);
+    }
+  }
+
   // Screens and states for each flow: what was declared, and what a passing step reached.
   for (const flow of flows) {
     const reached = new Map();
@@ -163,7 +173,8 @@ export function buildModel({ results, config, requirements, openQuestions, assum
     const covering = allScenarios.filter((scenario) => scenario.covers.includes(item.id));
     let status = 'not-covered';
     if (covering.length) status = covering.every((scenario) => scenario.status === 'passed') ? 'covered' : 'failing';
-    return { ...item, status, scenarios: [...new Set(covering.map((scenario) => scenario.title))] };
+    const named = (scenario) => `${scenario.number}. ${scenario.title}`;
+    return { ...item, status, scenarios: [...new Set(covering.map(named))], scenarioTitles: [...new Set(covering.map((scenario) => scenario.title))] };
   });
 
   const findings = { failedSteps: [], unverified: [], missingStates: [], uncovered: [], unknownIds: [], noSteps: [] };

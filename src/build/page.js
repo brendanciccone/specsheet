@@ -17,7 +17,7 @@ import {
   requirementStatus,
   requirementsMarkdown,
   scenariosMarkdown,
-  stateStatus,
+  stateRows,
   statesMarkdown,
   summaryFacts,
   summaryMarkdown,
@@ -66,9 +66,8 @@ main { max-width: 880px; margin: 0 auto; padding: 36px 20px 96px; }
 .stats .is-bad strong { color: var(--bad); }
 .stats .is-warn strong { color: var(--warn); }
 .stats .is-good strong { color: var(--good); }
-.eyebrow { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--muted); font-size: 14px; }
-.eyebrow svg { width: 20px; height: 20px; flex: none; }
-h1 { margin: 6px 0 0; font-size: 30px; line-height: 1.2; text-wrap: balance; }
+footer svg { width: 16px; height: 16px; margin-right: 6px; vertical-align: -3px; }
+h1 { margin: 0; font-size: 30px; line-height: 1.2; text-wrap: balance; }
 h2 { margin: 0; font-size: 21px; line-height: 1.3; }
 h3 { margin: 0; font-size: 17px; line-height: 1.35; }
 p { margin: 0 0 10px; }
@@ -107,11 +106,14 @@ details.fold > summary { cursor: pointer; margin-bottom: 10px; color: var(--acce
 video.walkthrough { display: block; width: 100%; max-width: 720px; height: auto; margin: 0 0 16px; border: 1px solid var(--line, #dcdbe6); border-radius: 8px; background: var(--soft); aspect-ratio: 16 / 10; object-fit: cover; object-position: top; }
 video.walkthrough[hidden] { display: none; }
 .step { margin: 0 0 6px; }
+.scenario-number { color: var(--muted); font-weight: 600; margin-right: 2px; }
 .flag { font-style: normal; font-size: 14px; }
 pre.error { margin: 4px 0 10px; padding: 10px 12px; overflow-x: auto; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
   color: var(--bad); background: var(--soft); border: 1px solid var(--line); border-radius: 6px; white-space: pre-wrap; }
 figure { margin: 12px 0 22px; }
-.same-shot { margin: 2px 0 18px; color: var(--muted); font-size: 14px; }
+.same-shot { margin-left: 6px; color: var(--muted); font-size: 13px; white-space: nowrap; }
+.meta { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+.meta a { color: inherit; }
 figure img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
 figcaption { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; color: var(--muted); font-size: 13px; }
 ul, ol { margin: 0 0 10px; padding-left: 22px; }
@@ -127,6 +129,10 @@ footer { margin-top: 56px; padding-top: 14px; border-top: 1px solid var(--line);
 .flow-stage { position: relative; height: min(76vh, 720px); overflow: hidden; border: 1px solid var(--line); border-radius: 8px;
   background: #fff; cursor: grab; touch-action: none; user-select: none; }
 .flow-stage.dragging { cursor: grabbing; }
+.flow-zoom { min-width: 44px; text-align: center; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.flow-canvas.gliding { transition: transform 0.18s ease-out; }
+.flow-viewer.full { position: fixed; inset: 0; z-index: 9; display: flex; flex-direction: column; padding: 12px 16px 16px; background: var(--page); }
+.flow-viewer.full .flow-stage { flex: 1; height: auto; }
 .flow-canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 .flow-canvas svg { display: block; }
 .flow-node { cursor: pointer; outline: none; }
@@ -252,36 +258,61 @@ const VIEW_SCRIPT = `
     openBox(image.src, caption ? caption.textContent : '');
   });
 
-  // ----- The user flow: zoom, drag, and click a screen -----
+  // ----- The user flow: move, zoom, and click a screen -----
   var stage = document.querySelector('.flow-stage');
   if (!stage) return;
+  var viewer = stage.closest('.flow-viewer');
   var canvas = stage.querySelector('.flow-canvas');
   var drawing = canvas.querySelector('svg');
   var hint = document.querySelector('.flow-hint');
+  var readout = document.querySelector('.flow-zoom');
   var width = drawing.width.baseVal.value;
   var height = drawing.height.baseVal.value;
   var view = { scale: 1, x: 0, y: 0 };
   var touched = false;
+  var LIMITS = { min: 0.1, max: 4 };
 
-  function apply() {
-    canvas.style.transform = 'translate(' + view.x + 'px,' + view.y + 'px) scale(' + view.scale + ')';
+  // Keep at least a strip of the drawing in sight, so it cannot be lost off the edge.
+  function clamp() {
+    var keep = 120;
+    view.x = Math.min(stage.clientWidth - keep, Math.max(keep - width * view.scale, view.x));
+    view.y = Math.min(stage.clientHeight - keep, Math.max(keep - height * view.scale, view.y));
   }
-  function fit() {
-    var scale = Math.min(stage.clientWidth / width, stage.clientHeight / height);
-    view.scale = scale;
-    view.x = (stage.clientWidth - width * scale) / 2;
-    view.y = (stage.clientHeight - height * scale) / 2;
+  function apply(glide) {
+    clamp();
+    canvas.classList.toggle('gliding', !!glide);
+    canvas.style.transform = 'translate(' + view.x + 'px,' + view.y + 'px) scale(' + view.scale + ')';
+    readout.textContent = Math.round(view.scale * 100) + '%';
+  }
+  function fitScale() {
+    return Math.min(stage.clientWidth / width, stage.clientHeight / height, 1);
+  }
+  function fit(glide) {
+    view.scale = fitScale();
+    view.x = (stage.clientWidth - width * view.scale) / 2;
+    view.y = (stage.clientHeight - height * view.scale) / 2;
+    touched = false;
+    apply(glide);
+  }
+  // The first view: large enough to read, starting where the flow starts. A drawing
+  // that fits at that size is shown whole.
+  function start() {
+    var whole = fitScale();
+    if (whole >= 0.6) return fit();
+    view.scale = Math.min(1, Math.max(0.6, stage.clientHeight / height));
+    view.x = 0;
+    view.y = 0;
     touched = false;
     apply();
   }
-  function zoom(factor, originX, originY) {
-    var next = Math.min(8, Math.max(0.15, view.scale * factor));
+  function zoomTo(scale, originX, originY, glide) {
+    var next = Math.min(LIMITS.max, Math.max(LIMITS.min, scale));
     var ratio = next / view.scale;
     view.x = originX - (originX - view.x) * ratio;
     view.y = originY - (originY - view.y) * ratio;
     view.scale = next;
     touched = true;
-    apply();
+    apply(glide);
   }
   function say(text) {
     hint.textContent = text;
@@ -294,27 +325,78 @@ const VIEW_SCRIPT = `
     if (picture) openBox(picture.src, node.dataset.label);
     else say(node.dataset.label + ': ' + (node.dataset.note || 'no screenshot for this state') + '.');
   }
+  function setFull(on) {
+    viewer.classList.toggle('full', on);
+    viewer.querySelector('[data-flow="full"]').textContent = on ? 'Close' : 'Full screen';
+    document.documentElement.style.overflow = on ? 'hidden' : '';
+    start();
+  }
 
-  document.querySelector('.flow-tools').addEventListener('click', function (event) {
+  viewer.querySelector('.flow-tools').addEventListener('click', function (event) {
     var button = event.target.closest('button[data-flow]');
     if (!button) return;
-    if (button.dataset.flow === 'fit') fit();
-    else zoom(button.dataset.flow === 'in' ? 1.3 : 1 / 1.3, stage.clientWidth / 2, stage.clientHeight / 2);
+    var centerX = stage.clientWidth / 2;
+    var centerY = stage.clientHeight / 2;
+    if (button.dataset.flow === 'fit') fit(true);
+    else if (button.dataset.flow === 'actual') zoomTo(1, centerX, centerY, true);
+    else if (button.dataset.flow === 'full') setFull(!viewer.classList.contains('full'));
+    else zoomTo(view.scale * (button.dataset.flow === 'in' ? 1.25 : 0.8), centerX, centerY, true);
   });
+
+  // A pinch on a trackpad arrives as a wheel event with the control key held, and zooms
+  // around the pointer by as much as the fingers moved. A plain scroll moves the drawing.
+  // Scrolling up and down is left to the page, unless the drawing is full screen or there
+  // is more of it above or below to show.
   stage.addEventListener('wheel', function (event) {
-    // Pinching on a trackpad arrives as a wheel event with the control key held.
-    if (!event.ctrlKey && !event.metaKey) return;
-    event.preventDefault();
     var bounds = stage.getBoundingClientRect();
-    zoom(event.deltaY < 0 ? 1.12 : 1 / 1.12, event.clientX - bounds.left, event.clientY - bounds.top);
+    var unit = event.deltaMode === 1 ? 16 : 1;
+    if (event.ctrlKey || event.metaKey) {
+      event.preventDefault();
+      var amount = Math.max(-60, Math.min(60, event.deltaY * unit));
+      zoomTo(view.scale * Math.exp(-amount * 0.01), event.clientX - bounds.left, event.clientY - bounds.top);
+      return;
+    }
+    var dx = event.deltaX * unit;
+    var dy = event.deltaY * unit;
+    if (event.shiftKey && !dx) { dx = dy; dy = 0; }
+    var full = viewer.classList.contains('full');
+    var before = { x: view.x, y: view.y };
+    view.x -= dx;
+    if (full || touched) view.y -= dy;
+    clamp();
+    var moved = view.x !== before.x || view.y !== before.y;
+    if (!moved && !full) return;
+    event.preventDefault();
+    if (Math.abs(dx) > Math.abs(dy)) touched = true;
+    apply();
   }, { passive: false });
 
+  // One finger or the mouse drags. Two fingers pinch.
+  var pointers = {};
   var drag = null;
+  var pinch = null;
+  function fingers() { return Object.keys(pointers).map(function (id) { return pointers[id]; }); }
   stage.addEventListener('pointerdown', function (event) {
-    drag = { x: event.clientX, y: event.clientY, startX: view.x, startY: view.y, moved: false, target: event.target };
+    pointers[event.pointerId] = { x: event.clientX, y: event.clientY };
     stage.setPointerCapture(event.pointerId);
+    var held = fingers();
+    if (held.length === 2) {
+      drag = null;
+      pinch = { distance: Math.hypot(held[0].x - held[1].x, held[0].y - held[1].y), scale: view.scale };
+      return;
+    }
+    drag = { x: event.clientX, y: event.clientY, startX: view.x, startY: view.y, moved: false, target: event.target };
   });
   stage.addEventListener('pointermove', function (event) {
+    if (!pointers[event.pointerId]) return;
+    pointers[event.pointerId] = { x: event.clientX, y: event.clientY };
+    var held = fingers();
+    if (pinch && held.length === 2) {
+      var bounds = stage.getBoundingClientRect();
+      var distance = Math.hypot(held[0].x - held[1].x, held[0].y - held[1].y);
+      zoomTo(pinch.scale * (distance / pinch.distance), (held[0].x + held[1].x) / 2 - bounds.left, (held[0].y + held[1].y) / 2 - bounds.top);
+      return;
+    }
     if (!drag) return;
     var dx = event.clientX - drag.x;
     var dy = event.clientY - drag.y;
@@ -327,6 +409,8 @@ const VIEW_SCRIPT = `
     apply();
   });
   function release(event) {
+    delete pointers[event.pointerId];
+    if (fingers().length < 2) pinch = null;
     if (!drag) return;
     var finished = drag;
     drag = null;
@@ -340,17 +424,34 @@ const VIEW_SCRIPT = `
   stage.addEventListener('dblclick', function (event) {
     if (event.target.closest('.flow-node')) return;
     var bounds = stage.getBoundingClientRect();
-    zoom(1.6, event.clientX - bounds.left, event.clientY - bounds.top);
+    zoomTo(view.scale * 1.6, event.clientX - bounds.left, event.clientY - bounds.top, true);
   });
+  stage.tabIndex = 0;
   stage.addEventListener('keydown', function (event) {
     var node = event.target.closest ? event.target.closest('.flow-node') : null;
     if (node && (event.key === 'Enter' || event.key === ' ')) {
       event.preventDefault();
-      openNode(node);
+      return openNode(node);
     }
+    var centerX = stage.clientWidth / 2;
+    var centerY = stage.clientHeight / 2;
+    var step = 80;
+    if (event.key === '+' || event.key === '=') zoomTo(view.scale * 1.25, centerX, centerY, true);
+    else if (event.key === '-') zoomTo(view.scale * 0.8, centerX, centerY, true);
+    else if (event.key === '0') fit(true);
+    else if (event.key === '1') zoomTo(1, centerX, centerY, true);
+    else if (event.key === 'ArrowLeft') { view.x += step; touched = true; apply(true); }
+    else if (event.key === 'ArrowRight') { view.x -= step; touched = true; apply(true); }
+    else if (event.key === 'ArrowUp') { view.y += step; touched = true; apply(true); }
+    else if (event.key === 'ArrowDown') { view.y -= step; touched = true; apply(true); }
+    else return;
+    event.preventDefault();
   });
-  window.addEventListener('resize', function () { if (!touched) fit(); });
-  fit();
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && viewer.classList.contains('full') && !box.classList.contains('open')) setFull(false);
+  });
+  window.addEventListener('resize', function () { if (!touched) start(); });
+  start();
 })();
 `;
 
@@ -369,7 +470,6 @@ const SCRIPT = `
     var clone = target.cloneNode(true);
     // A folded scenario is copied whole, as plain headings and paragraphs.
     clone.querySelectorAll('summary').forEach(function (summary) {
-      summary.querySelectorAll('.scenario-brief').forEach(function (brief) { brief.remove(); });
       summary.replaceWith.apply(summary, Array.prototype.slice.call(summary.childNodes));
     });
     clone.querySelectorAll('details').forEach(function (fold) {
@@ -377,15 +477,13 @@ const SCRIPT = `
     });
     clone.querySelectorAll('.same-shot').forEach(function (reference) {
       var selector = 'figure[data-file="' + CSS.escape(reference.dataset.file) + '"]';
-      if (clone.querySelector(selector)) {
-        reference.querySelectorAll('a').forEach(function (link) { link.replaceWith(link.textContent); });
-        return;
-      }
-      var original = document.querySelector(selector);
-      if (!original) return;
+      var step = reference.closest('p');
+      var original = clone.querySelector(selector) ? null : document.querySelector(selector);
+      reference.remove();
+      if (!original || !step) return;
       var copy = original.cloneNode(true);
       copy.removeAttribute('id');
-      reference.replaceWith(copy);
+      step.after(copy);
     });
     // After the screenshots shown earlier are back, so their buttons go too.
     clone.querySelectorAll('.no-copy').forEach(function (node) { node.remove(); });
@@ -521,20 +619,16 @@ function shotHtml(step, scenario, shown) {
   const earlier = file ? shown.files.get(file) : null;
   if (earlier) {
     const where = [step.shot.screen, step.shot.state].filter(Boolean).join(' · ');
-    return (
-      `<p class="same-shot" data-file="${escapeHtml(file)}">Same screen as ` +
-      `<a href="#${earlier.id}">step ${earlier.step} of "${escapeHtml(earlier.scenario)}"</a>` +
-      `${where ? ` (${escapeHtml(where)})` : ''}.</p>`
-    );
+    return { inline: `<a class="same-shot no-copy" data-file="${escapeHtml(file)}" href="#${earlier.id}" title="${escapeHtml(where)}">screenshot ↑</a>` };
   }
   shown.count += 1;
   const id = `shot-${shown.count}`;
   const html = figure(step.shot, `${scenario.title}, ${step.title}`, scenario.viewportLabel, id);
-  if (html && file) shown.files.set(file, { id, step: step.index + 1, scenario: scenario.title });
-  return html;
+  if (html && file) shown.files.set(file, { id });
+  return { block: html };
 }
 
-function stepHtml(step) {
+function stepHtml(step, inline = '') {
   const line = gherkinLine(step.title);
   const keyword = line.split(/\s+/)[0];
   const rest = stripKeyword(line);
@@ -542,7 +636,7 @@ function stepHtml(step) {
   if (step.status === 'failed') flag = ' <em class="flag bad">(Failing)</em>';
   else if (step.status === 'not-run') flag = ' <em class="flag warn">(Did not run)</em>';
   else if (step.resolvedKeyword === 'Then' && step.checks === 0) flag = ' <em class="flag warn">(Not verified)</em>';
-  let html = `<p class="step"><strong>${escapeHtml(keyword)}</strong> ${escapeHtml(rest)}${flag}</p>`;
+  let html = `<p class="step"><strong>${escapeHtml(keyword)}</strong> ${escapeHtml(rest)}${flag}${inline}</p>`;
   if (step.status === 'failed' && step.error) html += `<pre class="error">${escapeHtml(step.error)}</pre>`;
   return html;
 }
@@ -563,19 +657,14 @@ function flowVideosHtml(flow, flowKey) {
 }
 
 function scenarioHtml(scenario, key, manyViewports, flowKey, shown, open) {
-  const meta = [];
-  if (scenario.covers.length) meta.push(`Proves ${scenario.covers.join(', ')}`);
-  meta.push(scenario.status === 'passed' ? 'Passes' : 'Fails');
-  meta.push(scenario.viewportLabel);
-  const metaHtml = meta.map(escapeHtml).join(' · ');
   let video = '';
   if (scenario.videoFile) {
-    video = ` · <a href="${escapeHtml(scenario.videoFile)}">Video: ${escapeHtml(scenario.videoFile)}</a>`;
+    video = `<a href="${escapeHtml(scenario.videoFile)}">Video: ${escapeHtml(scenario.videoFile)}</a>`;
   } else if (scenario.chapter) {
     // A link that also works with no script: the browser opens the file at this second.
     const second = Math.floor(scenario.chapter.start);
     video =
-      ` · <a class="chapter" href="${escapeHtml(scenario.chapter.file)}#t=${second}" ` +
+      `<a class="chapter" href="${escapeHtml(scenario.chapter.file)}#t=${second}" ` +
       `data-video="${flowKey}-video-${scenario.chapter.index}" data-start="${scenario.chapter.start.toFixed(2)}">` +
       `In the video at ${clock(scenario.chapter.start)}</a>`;
   }
@@ -591,9 +680,8 @@ function scenarioHtml(scenario, key, manyViewports, flowKey, shown, open) {
 
   const body = scenario.steps
     .map((step) => {
-      let html = stepHtml(step);
-      if (step.shot) html += shotHtml(step, scenario, shown);
-      return html;
+      const shot = step.shot ? shotHtml(step, scenario, shown) : {};
+      return stepHtml(step, shot.inline) + (shot.block ?? '');
     })
     .join('');
 
@@ -605,7 +693,6 @@ function scenarioHtml(scenario, key, manyViewports, flowKey, shown, open) {
   const passed = scenario.status === 'passed';
   const brief = [
     scenario.covers.join(', '),
-    plural(scenario.steps.length, 'step'),
     `<span class="${passed ? 'good' : 'bad'}">${passed ? 'Passes' : 'Fails'}</span>`,
   ]
     .filter(Boolean)
@@ -614,9 +701,9 @@ function scenarioHtml(scenario, key, manyViewports, flowKey, shown, open) {
   // Folded to one line each when there are many, so the list can be read at a glance.
   return (
     `<article class="scenario" id="${key}" data-block="${key}"><details${open ? ' open' : ''}>` +
-    `<summary><h3>Scenario: ${escapeHtml(title)}</h3><span class="scenario-brief no-copy">${brief}</span></summary>` +
+    `<summary><h3><span class="scenario-number">${scenario.number}.</span> ${escapeHtml(title)}</h3> <span class="scenario-brief">${brief}</span></summary>` +
     `<div class="scenario-body">${tools({ images: true })}` +
-    `<p class="scenario-meta">${metaHtml}${video}</p>` +
+    (video ? `<p class="scenario-meta">${video}</p>` : '') +
     player +
     empty +
     body +
@@ -643,26 +730,19 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
     });
   });
 
-  // Summary
-  const facts = summaryFacts(model)
-    .map(([label, value, link]) => {
-      const cell = link ? `<a href="${escapeHtml(link)}">${escapeHtml(value)}</a>` : escapeHtml(value);
-      return `<tr><th scope="row">${escapeHtml(label)}</th><td>${cell}</td></tr>`;
-    })
-    .join('');
+  // What needs attention comes first. The plain facts are one line under the title.
   const note = rebuiltNote(model);
   const problems = problemLines(model);
   markdown.summary = `## Summary\n\n${summaryMarkdown(model)}`;
-  parts.push(
-    `<section id="summary" data-block="summary">${head('Summary')}` +
-      `<div class="table-wrap"><table class="facts"><tbody>${facts}</tbody></table></div>` +
-      (note ? `<p class="note" style="margin-top:12px">${escapeHtml(note)}</p>` : '') +
-      (problems.length
-        ? `<h3 style="margin-top:20px">To be aware of</h3><ul>${problems.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`
-        : '') +
-      '</section>',
-  );
   if (problems.length) markdown.summary += `\n\n### To be aware of\n\n${problems.map((line) => `- ${line}`).join('\n')}`;
+  if (problems.length || note) {
+    parts.push(
+      `<section id="summary" data-block="summary">${head('To be aware of')}` +
+        (problems.length ? `<ul>${problems.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>` : '') +
+        (note ? `<p class="note">${escapeHtml(note)}</p>` : '') +
+        '</section>',
+    );
+  }
 
   // Requirements
   const requirementRows = model.requirements
@@ -670,7 +750,7 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
       (item) =>
         `<tr><td>${escapeHtml(item.id)}</td><td>${escapeHtml(item.text)}</td><td>${escapeHtml(requirementSource(item.source))}</td>` +
         `<td class="${statusClass(item.status)}">${escapeHtml(requirementStatus(item.status))}</td>` +
-        `<td>${item.scenarios.map((title) => `<a href="#${scenarioIds.get(title)}">${escapeHtml(title)}</a>`).join('; ') || 'None'}</td></tr>`,
+        `<td>${item.scenarioTitles.map((title, index) => `<a href="#${scenarioIds.get(title)}">${escapeHtml(item.scenarios[index])}</a>`).join('; ') || 'None'}</td></tr>`,
     )
     .join('');
   markdown.requirements = `## Requirements\n\n${requirementsMarkdown(model)}`;
@@ -688,15 +768,16 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
     markdown.flow = '## User flow\n\nSee the attached image: flow.png';
     parts.push(
       `<section id="flow" data-block="flow">${head('User flow', { images: true })}` +
-        '<p>One column per screen, with its states as boxes. Arrows are the actions the run performed: the heavy line is the main path, ' +
-        'and the states a screen can turn into branch off below it. Actions that go back are listed under the state they start from.</p>' +
         // The interactive drawing. The picture below it is what gets copied and printed.
         (flowSvg
           ? '<div class="flow-viewer no-copy"><div class="flow-tools">' +
             '<button type="button" data-flow="out" aria-label="Zoom out">−</button>' +
+            '<span class="flow-zoom" aria-live="polite">100%</span>' +
             '<button type="button" data-flow="in" aria-label="Zoom in">+</button>' +
             '<button type="button" data-flow="fit">Fit</button>' +
-            '<span class="flow-hint" data-default="Drag to move. Click a screen to see it full size.">Drag to move. Click a screen to see it full size.</span>' +
+            '<button type="button" data-flow="actual">100%</button>' +
+            '<button type="button" data-flow="full">Full screen</button>' +
+            '<span class="flow-hint" data-default="Scroll or drag to move. Pinch or Ctrl + scroll to zoom.">Scroll or drag to move. Pinch or Ctrl + scroll to zoom.</span>' +
             `</div><div class="flow-stage"><div class="flow-canvas">${flowSvg}</div></div></div>`
           : '') +
         `<figure class="flow-static" data-file="flow.png"><img src="${flowImage}" alt="User flow diagram for ${escapeHtml(meta.title)}" />` +
@@ -719,16 +800,15 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
       .join('');
     const failed = flow.scenarios.filter((scenario) => scenario.status !== 'passed').length;
     const count =
-      `<p class="scenario-meta no-copy">${plural(flow.scenarios.length, 'scenario')}, ` +
-      `${failed ? `<span class="bad">${failed} failing</span>` : 'all passing'}.` +
-      `${fold ? ' Passing ones are folded: click one to see its steps and screenshots.' : ''} ` +
+      `<p class="scenario-meta no-copy">${plural(flow.scenarios.length, 'scenario')}` +
+      `${failed ? ` · <span class="bad">${failed} failing</span>` : ''} ` +
       '<button type="button" data-fold="open">Open all</button> <button type="button" data-fold="close">Fold all</button></p>';
     toc.push({
       id: key,
       label: `Scenarios: ${flow.name}`,
       items: flow.scenarios.map((scenario, index) => ({
         id: `${key}-scenario-${index}`,
-        label: manyViewports ? `${scenario.title} (${scenario.viewport.name})` : scenario.title,
+        label: `${scenario.number}. ${manyViewports ? `${scenario.title} (${scenario.viewport.name})` : scenario.title}`,
         passed: scenario.status === 'passed',
       })),
     });
@@ -750,38 +830,34 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
         .map((scenario) => {
           const ids = scenario.covers.length ? ` (${scenario.covers.join(', ')})` : '';
           const steps = stepLines(scenario, shared.length).map((line) => `<li>${escapeHtml(line)}</li>`).join('');
-          return `<li><strong>${escapeHtml(scenario.title)}</strong>${escapeHtml(ids)}<ul>${steps}</ul></li>`;
+          return `<li><strong>${scenario.number}. ${escapeHtml(scenario.title)}</strong>${escapeHtml(ids)}<ul>${steps}</ul></li>`;
         })
         .join('');
       return `${start}<ul>${items}</ul>`;
     })
     .join('');
-  // The checklist says the scenarios again as a list, so on a long page it starts folded
-  // unless it is the format this handoff was set up to use.
+  // The checklist says the scenarios again as a list, so it starts folded unless it is
+  // the format this handoff was set up to use.
   const checklistBody =
-    fold && meta.format !== 'checklist'
-      ? `<details class="fold"><summary class="no-copy">Show the checklist: the same ${plural(total, 'scenario')} as a list to tick off</summary>${checklist}</details>`
+    meta.format !== 'checklist'
+      ? `<details class="fold"><summary class="no-copy">Show as a checklist</summary>${checklist}</details>`
       : checklist;
   parts.push(`<section id="checklist" data-block="checklist">${head('Acceptance checklist')}${checklistBody}</section>`);
 
-  // States
-  const stateRows = model.flows
-    .flatMap((flow) =>
-      flow.screens.flatMap((screen) =>
-        screen.states.map((state) => {
-          const label = state.reason ? `${stateStatus(state.status)}: ${state.reason}` : stateStatus(state.status);
-          return `<tr><td>${escapeHtml(screen.name)}</td><td>${escapeHtml(state.name)}</td><td class="${statusClass(state.status)}">${escapeHtml(label)}</td></tr>`;
-        }),
-      ),
+  // States: one row per screen.
+  const states = stateRows(model)
+    .map(
+      (row) =>
+        `<tr><td>${escapeHtml(row.screen)}</td><td>${escapeHtml(row.shown.join(', ') || 'None')}</td><td>` +
+        (row.rest.map((item) => `<span class="${statusClass(item.status)}">${escapeHtml(item.text)}</span>`).join('; ') || 'None') +
+        '</td></tr>',
     )
     .join('');
   markdown.states = `## States\n\n${statesMarkdown(model)}`;
   parts.push(
     `<section id="states" data-block="states">${head('States')}` +
-      '<p>The states each screen needs, and whether a scenario shows them. "Not shown" means no step lands on that state: ' +
-      'either it has not been designed yet, or no scenario covers it.</p>' +
-      (stateRows
-        ? `<div class="table-wrap"><table><thead><tr><th>Screen</th><th>State</th><th>Status</th></tr></thead><tbody>${stateRows}</tbody></table></div>`
+      (states
+        ? `<div class="table-wrap"><table><thead><tr><th>Screen</th><th>Shown</th><th>Missing</th></tr></thead><tbody>${states}</tbody></table></div>`
         : '<p>No states were declared.</p>') +
       '</section>',
   );
@@ -811,7 +887,6 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
     markdown.files = `## Files\n\n${filesMarkdown(files)}`;
     parts.push(
       `<section id="files" data-block="files">${head('Files')}` +
-        '<p>These sit in the same folder as this page.</p>' +
         `<ul>${files
           .map(
             (file) =>
@@ -824,11 +899,18 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
 
   markdown.all = commentSections(model, files).join('\n\n');
   const blob = JSON.stringify(markdown).replaceAll('<', '\\u003c');
-  const eyebrow = ['Design handoff', meta.ticket?.key].filter(Boolean).join(' · ');
+  // The facts of the run, on one line.
+  const line = summaryFacts(model)
+    .filter(([label]) => label !== 'Result')
+    .map(([label, value, link]) => {
+      const text = label === 'Run on' ? `Run on ${value}` : value;
+      return link ? `<a href="${escapeHtml(link)}">${escapeHtml(text)}</a>` : escapeHtml(text);
+    })
+    .join(' · ');
 
   // The contents, beside the page on a wide screen and above it on a narrow one.
   const entries = [
-    { id: 'summary', label: 'Summary' },
+    problems.length || note ? { id: 'summary', label: `To be aware of${problems.length ? ` (${problems.length})` : ''}` } : null,
     { id: 'requirements', label: 'Requirements' },
     flowImage ? { id: 'flow', label: 'User flow' } : null,
     ...toc,
@@ -875,11 +957,11 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
     `<title>Handoff: ${escapeHtml(meta.title)}</title>\n<style>${STYLE}</style>\n</head>\n<body>\n` +
     nav +
     '<main data-block="all">\n' +
-    `<header><div class="head" style="border:0;margin:0;padding:0"><p class="eyebrow">${icon}<span>${escapeHtml(eyebrow)}</span></p>` +
+    `<header><div class="head" style="border:0;margin:0;padding:0;align-items:flex-start"><h1>${escapeHtml(meta.title)}</h1>` +
     '<span class="tools no-copy"><button type="button" data-copy="text">Copy whole page as text</button></span></div>' +
-    `<h1>${escapeHtml(meta.title)}</h1>${stats}</header>\n` +
+    `<p class="meta">${line}</p>${stats}</header>\n` +
     parts.join('\n') +
-    '\n<footer class="no-copy">Made with Specsheet. Every step on this page was run against the prototype in a browser.</footer>\n' +
+    `\n<footer class="no-copy">${icon}Made with Specsheet.</footer>\n` +
     '</main>\n' +
     '<div class="lightbox no-copy" role="dialog" aria-modal="true" aria-label="Screenshot">' +
     '<div class="lightbox-bar"><span class="lightbox-title"></span>' +
