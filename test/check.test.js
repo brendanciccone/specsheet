@@ -60,7 +60,7 @@ test('a step does not pick up screen names from inside its own function', () => 
       });
     });
   `);
-  assert.deepEqual(flows[0].scenarios[0].steps[0], { title: 'When I do it', screen: null, state: null });
+  assert.deepEqual(flows[0].scenarios[0].steps[0], { title: 'When I do it', screen: null, state: null, jumps: false });
 });
 
 function handoffFolder({ scenarios = 0, warnAt, requirements = 2 } = {}) {
@@ -199,4 +199,31 @@ test('many open questions are called out, with where the rest belong', () => {
   const [note] = questionNotes(ask(6));
   assert.match(note, /^6 open questions is a lot/);
   assert.match(note, /"note".*"assumed".*designer/);
+});
+
+test('a later step that opens a page by its address is noted, the opening step is not', () => {
+  const dir = handoffFolder();
+  fs.mkdirSync(path.join(dir, 'scenarios'));
+  const write = (second) =>
+    fs.writeFileSync(
+      path.join(dir, 'scenarios', 'a.scenario.js'),
+      `flow('Help', () => {
+        scenario('Open settings', async ({ page, step }) => {
+          await step('Given I am on the Help page', { screen: 'help', state: 'ready' }, async () => {
+            await page.goto('/help');
+          });
+          await step('When I open Settings from the menu', { screen: 'settings', state: 'ready' }, async () => {
+            ${second}
+          });
+        });
+      });`,
+    );
+
+  write("await page.getByRole('link', { name: 'Settings' }).click();");
+  assert.ok(!sizeCheck(dir).notes.some((note) => note.includes('by its address')));
+
+  write("await page.goto('/settings');");
+  const note = sizeCheck(dir).notes.find((item) => item.includes('by its address'));
+  assert.match(note, /^1 step opens a page by its address after the scenario has started: "When I open Settings from the menu" in "Open settings"\./);
+  assert.match(note, /click that instead\.$/);
 });

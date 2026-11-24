@@ -99,6 +99,14 @@ the handoff is built from it.
    with `ready`, `submitting`, `card-declined`. Use the same name every time the same
    screen and state appears, in every scenario.
 10. **Do not take screenshots or record anything yourself.** The program does both.
+11. **A step does what its title says, the way a user would do it.** The title is the
+   caption in the video, so the two have to match: "When I open Help from the menu"
+   clicks the Help link in the menu, and the video scrolls to it and shows the click.
+   Use `page.goto` only to open the scenario's starting screen. After that, get from
+   page to page by clicking what a user clicks. A later `page.goto` makes the page jump
+   with nothing pressed, and proves nothing about how the user gets there. Keep it only
+   for a page a user really does open by its address, such as a link from an email, and
+   word the title that way. `specsheet check` notes every later step that does it.
 
 ## Decisions
 

@@ -83,6 +83,8 @@ export function parseScenarioSource(source) {
         title: call.title,
         screen: firstString(head, 'screen'),
         state: firstString(head, 'state'),
+        // After a scenario's first step, a page opened by its address is a jump nobody clicked for.
+        jumps: scenario.steps.length > 0 && /\.goto\(/.test(tail),
       });
     }
   });
@@ -237,6 +239,14 @@ export function sizeCheck(dir, { screens: screensHint } = {}) {
     notes.push(`${counts.viewports} screen sizes are set, so every scenario runs ${counts.viewports} times.`);
   }
   notes.push(...questionNotes(openQuestions));
+  const jumps = scenarios.flatMap((scenario) => scenario.steps.filter((step) => step.jumps).map((step) => `"${step.title}" in "${scenario.title}"`));
+  if (jumps.length) {
+    notes.push(
+      `${plural(jumps.length, 'step opens', 'steps open')} a page by its address after the scenario has started: ${jumps.slice(0, 3).join(', ')}` +
+        `${jumps.length > 3 ? `, and ${jumps.length - 3} more` : ''}. In the video the page jumps there with nothing clicked. ` +
+        'If a user gets there through a link or a button, click that instead.',
+    );
+  }
 
   return { early, counts, commentChars, warnings, notes, limits };
 }

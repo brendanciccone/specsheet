@@ -54,11 +54,49 @@ export function readingTime(text, pace) {
 /** The card that opens each scenario in the video: its number and its name, and nothing else. */
 function titleCardHtml(title, number) {
   return (
+    // A recording only takes a picture when the page changes, and it can start a moment
+    // after the card is drawn. A card that never changed would then be missed altogether,
+    // so one dot in the corner keeps changing, too faintly to see.
+    '<style>@keyframes specsheet-live{from{opacity:.02}to{opacity:.07}}</style>' +
+    '<div style="position:fixed;left:0;top:0;width:3px;height:3px;background:#fff;animation:specsheet-live 300ms linear infinite alternate"></div>' +
     '<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#1a1a1a;pointer-events:none">' +
     '<div style="max-width:76%;text-align:center;font:600 44px/1.2 system-ui,-apple-system,Segoe UI,sans-serif;color:#fff">' +
     `${number ? `<span style="color:#9a9a9a">${number}.</span> ` : ''}${escapeHtml(title)}</div></div>`
   );
 }
+
+/**
+ * A small sign at the top of the video for a change of page that nobody clicks for: an
+ * address opened directly, Back, a reload. Without it the page seems to jump by itself.
+ */
+function wayHtml(text) {
+  return (
+    '<style>@keyframes specsheet-way{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}</style>' +
+    '<div style="position:fixed;left:0;right:0;top:18px;display:flex;justify-content:center;pointer-events:none;' +
+    'animation:specsheet-way 160ms ease-out both">' +
+    '<div style="max-width:70%;padding:7px 16px;border-radius:999px;background:rgba(24,24,24,0.93);color:#fff;white-space:nowrap;overflow:hidden;' +
+    'text-overflow:ellipsis;font:500 16px/1.35 system-ui,-apple-system,Segoe UI,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,0.28)">' +
+    `${escapeHtml(text)}</div></div>`
+  );
+}
+
+/** The part of an address worth showing: where on the site, without the site. */
+function shortAddress(address) {
+  try {
+    const url = new URL(String(address), 'http://site.invalid');
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return String(address);
+  }
+}
+
+// Ways to change the page that are not a click on it, and what the video says for each.
+const WAYS = {
+  goto: (address) => `Opens ${shortAddress(address)}`,
+  goBack: () => 'Back',
+  goForward: () => 'Forward',
+  reload: () => 'Reloads the page',
+};
 
 /** How long a caption is shown before its step starts, so the viewer knows what they are about to see. */
 export function leadTime(text, pace) {
@@ -161,11 +199,10 @@ function scrollToward(element, wait) {
     if (box.top < frame.top - 1 || box.bottom > frame.bottom + 1) inView = false;
   }
   if (inView) return false;
-  // Wait until the page has stopped moving, so the pointer goes to where the element
-  // ends up and nothing is clicked while it is still sliding.
   return new Promise((resolve) => {
-    setTimeout(() => {
-      element.scrollIntoView({ behavior: 'smooth', block, inline: 'nearest' });
+    // Wait until the page has stopped moving, so the pointer goes to where the element
+    // ends up and nothing is clicked while it is still sliding.
+    const settle = () => {
       const started = performance.now();
       let last = null;
       let still = 0;
@@ -177,6 +214,33 @@ function scrollToward(element, wait) {
         else requestAnimationFrame(check);
       };
       requestAnimationFrame(check);
+    };
+    // What the page's own scroll could not bring into view, such as a row inside a
+    // panel that scrolls by itself, is left to the browser.
+    const finish = () => {
+      element.scrollIntoView({ behavior: 'smooth', block: block === 'start' ? 'nearest' : block, inline: 'nearest' });
+      settle();
+    };
+    setTimeout(() => {
+      // Scroll the page at the speed of a hand: further takes longer. The browser's own
+      // smooth scroll covers any distance in a fraction of a second, which reads as a jump.
+      const page = document.scrollingElement || document.documentElement;
+      const now = element.getBoundingClientRect();
+      const from = window.scrollY;
+      const aim = block === 'start' ? now.top - top : now.top + now.height / 2 - window.innerHeight / 2;
+      const to = Math.max(0, Math.min(page.scrollHeight - window.innerHeight, from + aim));
+      const distance = Math.abs(to - from);
+      if (distance < 2) return finish();
+      const ms = Math.min(1300, Math.max(380, 320 + distance * 0.5));
+      const started = performance.now();
+      const frame = (time) => {
+        const part = Math.min(1, Math.max(0, (time - started) / ms));
+        const eased = part < 0.5 ? 4 * part ** 3 : 1 - (-2 * part + 2) ** 3 / 2;
+        window.scrollTo({ top: from + (to - from) * eased, behavior: 'instant' });
+        if (part < 1) requestAnimationFrame(frame);
+        else finish();
+      };
+      requestAnimationFrame(frame);
     }, wait);
   });
 }
@@ -203,7 +267,21 @@ async function bringIntoView(locator, timeout, look = false) {
  * what Playwright does on its own, so a scenario behaves the same as in a fast run.
  */
 function humanize(page) {
-  paced.add(page);
+  if (!paced.has(page)) {
+    paced.add(page);
+    for (const [name, say] of Object.entries(WAYS)) {
+      const original = page[name];
+      if (typeof original !== 'function') continue;
+      page[name] = async (...args) => {
+        // The page a scenario opens on needs no sign: its title card has just named it.
+        if (!cards.get(page) && page.url() !== 'about:blank') {
+          await page.screencast?.showOverlay?.(wayHtml(say(args[0])), { duration: 1800 }).catch(() => {});
+          await page.waitForTimeout(700).catch(() => {});
+        }
+        return original.apply(page, args);
+      };
+    }
+  }
   const proto = Object.getPrototypeOf(page.locator('html'));
   if (proto[HUMAN]) return;
   proto[HUMAN] = true;
@@ -342,6 +420,20 @@ async function showCaption(page, title, still = false) {
   }
 }
 
+/**
+ * Once a caption has faded in, put a still one in its place. An overlay plays its fade
+ * again whenever the page changes under it or a screenshot hides it, and a still one
+ * has nothing to play.
+ */
+async function steady(page, caption, title) {
+  if (!caption) return caption;
+  await page.waitForTimeout(220).catch(() => {});
+  const still = await showCaption(page, title, true);
+  if (!still) return caption;
+  await caption.dispose?.().catch(() => {});
+  return still;
+}
+
 /** Wait until the page has painted whatever it was about to paint. */
 function settle(page) {
   return page.evaluate(
@@ -476,7 +568,10 @@ export const test = base.extend({
       let caption = pace > 0 && !card ? await showCaption(page, record.title) : null;
       const before = pace > 0 ? page.url() : null;
       // Say what is about to happen, then do it.
-      if (led) await page.waitForTimeout(leadTime(record.title, pace)).catch(() => {});
+      if (led) {
+        caption = await steady(page, caption, record.title);
+        await page.waitForTimeout(Math.max(0, leadTime(record.title, pace) - 220)).catch(() => {});
+      }
       try {
         await base.step(record.title, async () => {
           await body();
@@ -515,6 +610,7 @@ export const test = base.extend({
             const old = caption;
             caption = await showCaption(page, record.title, Boolean(old));
             await old?.dispose?.().catch(() => {});
+            if (!old) caption = await steady(page, caption, record.title);
           }
           if (moved) await restorePointer(page);
           const acted = record.durationMs - (led ? leadTime(record.title, pace) : 0) > 400;
@@ -601,6 +697,10 @@ export function scenario(title, options, body) {
     async ({ page, step, context, request }, testInfo) => {
       const pace = Number(process.env.SPECSHEET_PACE ?? runConfig()?.pace ?? 0);
       if (pace > 0) {
+        // The title card, the captions and the hand-speed pointer all take time that
+        // counts against the scenario's time limit. A paced run gets four times the limit,
+        // so a scenario that passes in a fast run does not time out in the final one.
+        testInfo.setTimeout(testInfo.timeout * 4);
         humanize(page);
         // A title card at the start of the video: the scenario's name, then straight on.
         // It is written into the empty page the scenario starts on, so it is what the
@@ -618,7 +718,7 @@ export function scenario(title, options, body) {
             holder.innerHTML = html;
             document.body.append(holder);
             return true;
-          }, titleCardHtml(title, current.count > 1 ? number : null))
+          }, titleCardHtml(title, number))
           .catch(() => false);
         await page.waitForTimeout(Math.min(2600, 1100 + 30 * title.length)).catch(() => {});
         // The pointer is there from the first moment the first page is.
