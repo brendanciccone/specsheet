@@ -13,7 +13,7 @@ const TEXT = { label: 14, labelLine: 17, chip: 13, name: 16 };
 // width. Past that it is cut at the bottom and fades out, to say there is more.
 const THUMB = { min: 96, wide: 1.2, narrow: 2.2 };
 // A decision: a small diamond with its question beside it, and one branch per answer.
-const DECISION = { offset: 60, radius: 16, row: 60, branch: 40, width: 340 };
+const DECISION = { offset: 60, radius: 16, pad: 16, row: 64, branch: 40, width: 340 };
 // How far a state sits to the right of the state it branches from. The action is
 // written on that stretch of line, so it has to hold a short label.
 const INDENT = 224;
@@ -256,7 +256,7 @@ export function layoutGraph(graph, viewport) {
       const questions = [...new Set(out.filter((pair) => pair.decision).map((pair) => pair.decision.question))];
       for (const question of questions) {
         const answers = out.filter((pair) => pair.decision?.question === question);
-        const decision = { from: node.id, question, lines: wrap(question, DECISION.width - DECISION.offset - DECISION.radius - 14, 15, { bold: true }), main: answers.some((pair) => pair.main), branches: [] };
+        const decision = { from: node.id, question, lines: wrap(question, DECISION.width - DECISION.offset - 2 * DECISION.pad, 14, { bold: true, maxLines: 2 }), main: answers.some((pair) => pair.main), branches: [] };
         decisions.push(decision);
         rows.push({ kind: 'decision', decision });
         for (const pair of answers) {
@@ -430,6 +430,17 @@ export const FIT_LABELS = `(function (root) {
     var trail = label.querySelector('text.trail');
     if (trail) trail.setAttribute('x', left + width + 10);
   });
+  root.querySelectorAll('g.flow-question').forEach(function (badge) {
+    var box = badge.querySelector('rect');
+    var lines = badge.querySelectorAll('text');
+    var widest = 0;
+    lines.forEach(function (line) { widest = Math.max(widest, line.getComputedTextLength()); });
+    if (!widest) return;
+    var width = Math.ceil(widest) + 2 * Number(badge.dataset.pad);
+    var left = Number(badge.dataset.left);
+    box.setAttribute('width', width);
+    lines.forEach(function (line) { line.setAttribute('x', left + width / 2); });
+  });
 })`;
 
 function dataUri(file) {
@@ -512,7 +523,7 @@ function edgesSvg(layout, marker) {
   // Where a line leaves the bottom of a state, marked with a dot so it reads as joined on.
   const ports = new Set();
   const draw = (points, main, arrow = true) => {
-    (main ? mainPaths : paths).push(`<path d="${route(points)}" class="edge${main ? ' edge-main' : ''}"${arrow ? ` marker-end="url(#${marker}${main ? '-main' : ''})"` : ''}/>`);
+    (main ? mainPaths : paths).push(`<path d="${route(points)}" class="edge${main ? ' edge-main' : ''}"${arrow ? ` marker-end="url(#${marker})"` : ''}/>`);
   };
   const middle = (id) => positions.get(id).y + tall(id) / 2;
   const turn = (lane, key) => {
@@ -567,35 +578,40 @@ function edgesSvg(layout, marker) {
     const trunk = from.x + TRUNK;
     const { x, y } = decision;
     const r = DECISION.radius;
+    // Half the height of the badge the question sits in.
+    const drop = (decision.lines.length * 18 + 16) / 2;
     draw([[trunk, from.y + tall(decision.from)], [trunk, y], [x - r, y]], decision.main, false);
     ports.add(`${trunk},${from.y + tall(decision.from)}`);
     for (const branch of decision.branches) {
       const { pair } = branch;
       if (branch.kind === 'state') {
         const to = positions.get(pair.to);
-        draw([[x, y + r], [x, middle(pair.to)], [to.x - 3, middle(pair.to)]], pair.main);
+        draw([[x, y + drop], [x, middle(pair.to)], [to.x - 3, middle(pair.to)]], pair.main);
         labels.push(labelSvg([branch.answer], middle(pair.to), { from: x, to: to.x - 16, tone: tone(branch.answer) }));
       } else if (branch.kind === 'forward') {
-        draw([[x, y + r], [x, branch.y], ...onward(pair, decision.lane, branch.y)], pair.main);
+        draw([[x, y + drop], [x, branch.y], ...onward(pair, decision.lane, branch.y)], pair.main);
         labels.push(labelSvg([branch.answer], branch.y, { from: x + 12, room: 120, tone: tone(branch.answer) }));
       } else {
         const room = 120;
         const answer = wrap(branch.answer, room, TEXT.label, { bold: true });
         const end = x + 12 + Math.max(...answer.map((line) => textWidth(line, TEXT.label, true))) + 2 * LABEL.pad;
-        draw([[x, y + r], [x, branch.y], [end + 4, branch.y]], pair.main, false);
+        draw([[x, y + drop], [x, branch.y], [end + 4, branch.y]], pair.main, false);
         const back = wrap(branch.back, 200, TEXT.chip, { maxLines: 1 })[0];
         labels.push(labelSvg([branch.answer], branch.y, { from: x + 12, room, tone: tone(branch.answer), trail: back }));
       }
     }
+    // The question, inside its badge. The badge is a pill when the question is one line.
+    const badge = { left: x - r, width: Math.ceil(Math.max(...decision.lines.map((line) => textWidth(line, 14, true)))) + 2 * DECISION.pad, height: 2 * drop };
     labels.push(
-      `<path d="M ${x} ${y - r} L ${x + r} ${y} L ${x} ${y + r} L ${x - r} ${y} Z" class="decision${decision.main ? ' decision-main' : ''}"/>` +
-        `<text x="${x - 0.4}" y="${y}" text-anchor="middle" dominant-baseline="central" class="decision-mark">?</text>` +
+      `<g class="flow-question" data-left="${badge.left}" data-pad="${DECISION.pad}">` +
+        `<rect x="${badge.left}" y="${y - drop}" width="${badge.width}" height="${badge.height}" rx="${decision.lines.length === 1 ? drop : 12}" class="decision"/>` +
         decision.lines
           .map((line, index) => {
-            const lineY = y - ((decision.lines.length - 1) * 18) / 2 + index * 18;
-            return `<text x="${x + r + 9}" y="${lineY}" dominant-baseline="central" class="decision-text">${escapeHtml(line)}</text>`;
+            const lineY = y - ((decision.lines.length - 1) * 18) / 2 + index * 18 + 0.5;
+            return `<text x="${badge.left + badge.width / 2}" y="${lineY}" text-anchor="middle" dominant-baseline="central" class="decision-text">${escapeHtml(line)}</text>`;
           })
-          .join(''),
+          .join('') +
+        '</g>',
     );
   }
 
@@ -694,7 +710,6 @@ export function renderFlowSvg(model, viewportName = model.meta.viewports[0]?.nam
     .join(' · ');
   const all = drawings.flatMap((item) => item.graph.nodes);
   const hasMissing = all.some((node) => node.missing);
-  const hasMain = drawings.some((item) => item.graph.mainPath.length);
   const hasBack = drawings.some(
     (item) =>
       [...item.layout.chips.values()].some((list) => list.length) ||
@@ -716,15 +731,12 @@ export function renderFlowSvg(model, viewportName = model.meta.viewports[0]?.nam
     .node-state { font: 600 16px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1a1a1a; }
     .start-pill { fill: #e9e9e9; }
     .start-text { font: 600 12px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #333333; }
-    .edge { fill: none; stroke: #a3a3a3; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
-    .edge-main { stroke: #5c5c5c; }
-    .port { fill: #a3a3a3; stroke: #ffffff; stroke-width: 2; }
+    .edge { fill: none; stroke: #9a9a9a; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+    .port { fill: #9a9a9a; stroke: #ffffff; stroke-width: 2; }
     .edge-label-box { fill: #ffffff; stroke: #d9d9d9; }
     .edge-label { font: 500 13.5px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1a1a1a; }
-    .decision { fill: #fff8e6; stroke: #b98a1e; stroke-width: 1.5; }
-    .decision-main { stroke-width: 2.5; }
-    .decision-mark { font: 700 14px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #7a4708; }
-    .decision-text { font: 600 15px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1a1a1a; }
+    .decision { fill: #fff4d6; stroke: #d9a531; stroke-width: 1.5; }
+    .decision-text { font: 600 14px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1a1a1a; }
     .answer-yes { fill: #e9f6e2; stroke: #5a9a3c; }
     .answer-no { fill: #fdecec; stroke: #c96a6a; }
     .answer-text-yes { fill: #24520d; font-weight: 600; }
@@ -751,9 +763,8 @@ export function renderFlowSvg(model, viewportName = model.meta.viewports[0]?.nam
 
   const legendItems = [['<rect x="0" y="-7" width="22" height="14" rx="4" class="node"/>', 'Shown in a scenario', 30]];
   if (hasMissing) legendItems.push(['<rect x="0" y="-7" width="22" height="14" rx="4" class="node node-missing"/>', 'Needed, but not shown or failing', 30]);
-  if (hasMain) legendItems.push(['<path d="M0 0 H22" class="edge edge-main"/>', 'The main path', 30]);
   if (drawings.some((item) => item.layout.decisions.length)) {
-    legendItems.push(['<path d="M11 -8 L19 0 L11 8 L3 0 Z" class="decision"/>', 'A decision, with one branch per answer', 30]);
+    legendItems.push(['<rect x="0" y="-7" width="22" height="14" rx="7" class="decision"/>', 'A decision, with one branch per answer', 30]);
   }
   if (hasBack) legendItems.push(['<text x="0" y="0" dominant-baseline="central" class="chip">↩</text>', 'Leads to a state shown elsewhere', 16]);
   let legendX = PAD;
@@ -774,8 +785,7 @@ export function renderFlowSvg(model, viewportName = model.meta.viewports[0]?.nam
     `<style>${style.replace(/^(\s*)\./gm, '$1.specsheet-flow .')}</style>` +
     `<defs><linearGradient id="specsheet-fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#fff"/></linearGradient>` +
     `<filter id="specsheet-lift" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.5" flood-color="#000" flood-opacity="0.08"/></filter>` +
-        `<marker id="arrowhead" viewBox="0 0 16 14" refX="15" refY="7" markerWidth="16" markerHeight="14" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M1 1 L15 7 L1 13 z" fill="#a3a3a3" stroke="#a3a3a3" stroke-width="1.5" stroke-linejoin="round"/></marker>` +
-    `<marker id="arrowhead-main" viewBox="0 0 16 14" refX="15" refY="7" markerWidth="16" markerHeight="14" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M1 1 L15 7 L1 13 z" fill="#5c5c5c" stroke="#5c5c5c" stroke-width="1.5" stroke-linejoin="round"/></marker></defs>` +
+        `<marker id="arrowhead" viewBox="0 0 16 14" refX="15" refY="7" markerWidth="16" markerHeight="14" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M1 1 L15 7 L1 13 z" fill="#9a9a9a" stroke="#9a9a9a" stroke-width="1.5" stroke-linejoin="round"/></marker></defs>` +
     `<rect class="bg" width="${width}" height="${height}"/>` +
     `<text x="${PAD}" y="${PAD + 10}" dominant-baseline="central" class="title">User flow: ${escapeHtml(model.meta.title)}</text>` +
     `<text x="${PAD}" y="${PAD + 34}" dominant-baseline="central" class="subtitle">${escapeHtml(subtitle)}</text>` +
