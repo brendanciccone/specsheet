@@ -186,12 +186,14 @@ function scrollToward(element, wait) {
   const top = 70;
   const bottom = window.innerHeight - 130;
   let block = 'center';
-  let inView = box.top >= top && box.bottom <= bottom && box.right > 0 && box.left < window.innerWidth;
+  let inView = box.top >= top && box.bottom <= bottom;
   if (box.height > bottom - top) {
     // Taller than the screen: it is in view once it fills half of it.
     inView = Math.min(box.bottom, window.innerHeight) - Math.max(box.top, 0) >= window.innerHeight * 0.5;
     block = 'start';
   }
+  // Tall or not, some of it has to be within the width of the window.
+  if (box.right <= 0 || box.left >= window.innerWidth) inView = false;
   // Inside a panel that scrolls on its own, it also has to be in the part the panel shows.
   // Sideways it only has to be within reach: a wide table is in view while part of it shows.
   for (let node = element.parentElement; inView && node && node !== document.documentElement; node = node.parentElement) {
