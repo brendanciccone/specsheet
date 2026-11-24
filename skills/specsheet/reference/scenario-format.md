@@ -44,10 +44,12 @@ flow(
 
 **`flow(name, options, body)`** groups the scenarios for one user flow.
 
-- `states` lists every state each screen should have, including ones the design does not
-  show yet. Decide this from the code: a screen that loads data needs loading, empty and
-  error states; a form needs invalid, submitting, success and failure states; a list
-  needs none, one and many.
+- `states` lists the states each screen needs for this story, including ones the design
+  does not show yet. List a state when the ticket asks for it, the design draws it, or a
+  user would be stuck without it: a screen that loads data needs to say when it is
+  loading, empty or failed, and a form needs to say when the input is wrong and when
+  sending fails. Do not list a state only because a checklist of states has it. Every
+  state here becomes a box in the user flow and, if nothing shows it, a finding.
 - `notApplicable` maps `"screen/state"` to the reason a state does not apply. Use it only
   when the user agrees.
 
@@ -61,6 +63,9 @@ flow(
 - `title` starts with Given, When, Then, And or But.
 - `screen` and `state` name where the step lands. A "When" step names the state its
   action leads to.
+- `decision` and `answer` mark a fork: an action that can end more than one way,
+  depending on something the user or the system decides. Put them on the "When" step.
+  `decision` is the question, `answer` is how this scenario answers it. See "Decisions".
 - `capture` is `'page'` (the default, the whole page), `'viewport'` (only what is
   visible, for dialogs, menus and toasts) or `'none'`.
 
@@ -92,6 +97,64 @@ the handoff is built from it.
    screen and state appears, in every scenario.
 10. **Do not take screenshots or record anything yourself.** The program does both.
 
+## Decisions
+
+When scenarios leave the same screen and state in different directions because of one
+condition, name that condition. Give the "When" step of each of those scenarios the same
+`decision`, worded exactly the same, and its own `answer`:
+
+```js
+await step('When I pay with a valid card', { screen: 'checkout/payment', state: 'paid', decision: 'Does the bank accept the card?', answer: 'Yes' }, async () => { ... });
+// in another scenario
+await step('When I pay with a card the bank declines', { screen: 'checkout/payment', state: 'card-declined', decision: 'Does the bank accept the card?', answer: 'No' }, async () => { ... });
+```
+
+The user flow then draws the question once, in a yellow badge under the state both scenarios
+start from, with a "Yes" branch and a "No" branch. Without it, the flow shows two
+separate arrows and the reader has to work out that they are two outcomes of one thing.
+
+- Write the question so it can be answered yes or no: "Is the email valid?", "Is the cart
+  empty?", "Does the bank accept the card?". For three or more outcomes, keep each answer
+  to a word or two: "Yes", "Declined", "No answer".
+- Use a decision only for a real fork, where at least two scenarios answer the same
+  question from the same state. Two different things a user may choose to do, such as
+  "open the menu" and "search", are not a decision: leave them as plain actions.
+- The step titles stay as they are. The Gherkin is unchanged.
+
+## What earns a scenario
+
+A scenario is worth writing when a developer or a tester would otherwise have to guess.
+Write one for:
+
+- anything the ticket asks for;
+- anything this design decides: its own wording, validation, order of steps, what is
+  kept and what is lost;
+- a failure the user has to recover from;
+- standard behaviour this design changes, such as a dialog that must *not* close on a
+  click outside it.
+
+Do not write one for behaviour the platform or the product already gives, when the
+design leaves it as it is:
+
+- a dialog, menu or popover closing on Escape, on a click outside, or on its close button;
+- the browser's Back button, links opening, the page scrolling;
+- focus moving into a dialog and back, Tab order, Enter submitting a form;
+- hover and pressed styles;
+- anything already covered by an earlier story, such as the site header or signing in.
+
+List what you left out in the `assumed` list of `requirements.json`, one plain sentence
+each: "Dialogs close on Escape and on a click outside them." The handoff prints the list
+once, under "Assumed standard behaviour", so QA sees it and it costs one line, not a
+scenario. If you are unsure whether something is standard here, ask the user.
+
+The same goes inside a scenario. A step is a thing the user does or sees that matters to
+this behaviour. "Then the dialog closes" after choosing an option is not a step unless
+the closing is the point.
+
+Aim for the fewest scenarios that prove every requirement: usually one for the main path
+and one for each way it can go differently. Two scenarios that differ only in the data
+typed are one scenario.
+
 ## Screens behind a sign-in
 
 Before you write a scenario for a screen that needs a signed-in user, ask how the
@@ -116,7 +179,7 @@ The program takes a screenshot after every step. When several steps in a row lan
 same screen and state, the handoff shows the one taken after the last of them, when the
 page has settled and the checks have passed. So a "When" followed by its "Then" share one
 screenshot, shown beside the "Then". The handoff page shows each screen and state once: a
-later step that lands on one shown earlier links back to that picture.
+later step that lands on one shown earlier has a short link back to that picture.
 
 ## Screen sizes
 

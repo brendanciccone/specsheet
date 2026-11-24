@@ -8,7 +8,7 @@ where the design was made. Tell the user the cost before you start an expensive 
 | Claude Code | The code itself | None | Lowest |
 | Claude Design | An HTML export, or a handoff to Claude Code | Check it is clickable. Add behaviour if not | Low to medium |
 | Paper | The real HTML and CSS of each screen | Add behaviour, states and mock data | Medium |
-| Figma | A code translation of each frame, as a reference | Rebuild each screen as code | Highest |
+| Figma | The values, images and a picture of each frame | Rebuild each screen to match its frame exactly, then check it against the frame | Highest |
 
 ## Where the prototype goes
 
@@ -61,9 +61,53 @@ The design is already a prototype.
 
 ## Figma
 
-- Read each frame through the Figma connection. What comes back is a reference to adapt,
-  not final code.
-- Rebuild each screen as code. Reuse the project's components where they exist.
+The prototype has to be the design, not a sketch of it. Its screenshots and videos go to
+engineering as the reference, so a logo that is missing, an icon from another set or a
+label cut short sends them the wrong thing. A prototype that is nearly right does more
+harm than no prototype. Build it to match the frames exactly, and prove that it does
+before you show it to the user.
+
+**Read everything the frame has, before writing any code.** Through the Figma connection,
+for every frame in the story:
+
+- the design context: the layout, sizes, spacing, colours and type of every layer;
+- the variables and styles the file defines, so colours and type come from the file's
+  own values;
+- every image the frame uses: logos, icons, illustrations, photos, avatars. Download
+  each one from the file into the prototype's own assets folder;
+- a picture of the frame, saved as `handoff/<TICKET-KEY>/design/<frame-name>.png`, for
+  the check below.
+
+What comes back as code is a reference for the values, not code to paste. The values in
+it are the ones to use.
+
+**Then rebuild each screen so nothing differs:**
+
+- **Images come from the file.** Never swap in an icon from a library, an emoji, a
+  placeholder box or a logo you drew yourself. If an image cannot be downloaded, stop and
+  ask the user for it.
+- **Text is copied, character for character.** Every heading, label, button, hint,
+  number and placeholder, with its capitals and punctuation. Do not reword, shorten,
+  translate or invent text, and do not leave any out.
+- **Text fits the way it does in the frame.** A label on one line in the frame is on one
+  line in the prototype. Nothing is cut off, ends in "…" or wraps where the frame does
+  not, unless the frame itself shows it that way.
+- **Sizes are the frame's sizes.** Widths, heights, spacing, corner radii, borders and
+  shadows come from the design context, not from a guess that looks close.
+- **Type is the frame's type.** The same font family, weight, size, line height and
+  letter spacing. Load the font the file uses. If it is not available, ask before you
+  use another one, and say so in the handoff.
+- **Nothing is added.** No element, text or decoration that the frame does not have.
+- **Small things count.** Dividers, badges, dots, focus rings, the order of items, the
+  alignment of an icon with its text.
+
+Reuse the project's components where they come out the same as the frame. Where a
+component looks different from the frame, do not quietly accept the difference and do not
+change the component: tell the user what differs. That is a finding for the designer and
+engineering.
+
+**What the frames do not say:**
+
 - Frames show how a screen looks, not what happens between screens. Use the frame order,
   the frame names and any prototype links, and ask the user about anything you cannot
   tell. Do not invent behaviour.
@@ -75,16 +119,36 @@ The design is already a prototype.
 ## When you rebuilt the design
 
 With `design.rebuilt` set to `true`, the handoff says so in its summary: the original
-design is the reference for how it looks, and the prototype, videos and screenshots show
-how it behaves.
+design is the reference for how it looks, and the prototype, with the screenshots and
+videos taken of it, shows how it behaves.
 
-Two things follow from that:
+Three things follow from that:
 
-1. **The user must review the prototype against their design before the run.** You wrote
+1. **Check the prototype against the design yourself, frame by frame, before the user
+   sees it.** This is the one time you look at pictures (rule 1). For each frame:
+   - Take a picture of the prototype at the frame's size:
+     `npx playwright screenshot --viewport-size "<width>,<height>" <address> handoff/<TICKET-KEY>/design/<frame-name>.built.png`
+   - Open it beside the frame's picture and go through this list: every logo, icon and
+     image is there and is the same one; every piece of text is there, complete, worded
+     the same and wrapped the same; sizes, spacing and alignment match; colours and type
+     match; nothing is extra.
+   - Fix each difference you can fix under the rules above, and compare again. Stop when
+     no difference is left that you can fix, not when it looks close. Keep the ones you
+     cannot fix, such as a project component that looks different, for the user's review
+     below.
+   - Compare once per frame, and once more after fixes. Do not look at the screenshots
+     of a run: those you still read as text.
+2. **Then the user reviews it against their design, before the run.** Give them the list
+   of frames you compared and, for each, anything that still differs and why: a font that
+   could not be loaded, an image that could not be downloaded, a project component that
+   looks different. Say "no differences found" only for a frame you compared. You wrote
    both the prototype and the scenarios from the same source, so a passing run shows they
    agree with each other. It does not show that either matches the original design.
-2. **Tell the user this costs more.** Reading every frame and writing every screen is
-   several times the cost of the rest of the handoff.
+3. **Tell the user this costs more.** Reading every frame, writing every screen and
+   checking each one is several times the cost of the rest of the handoff. It is also
+   another reason to split a large story.
+
+The same check applies to a Paper or Claude Design prototype you changed the look of.
 
 ## A connected codebase
 

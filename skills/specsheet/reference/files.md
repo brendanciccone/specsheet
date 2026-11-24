@@ -38,8 +38,8 @@ handoff/HELP-12/
 | `format` | `gherkin` or `checklist`: which one appears in the ticket text |
 | `videos` | `flow` (one walkthrough video per flow, the default), `scenario` (one per scenario) or `none`. With `none` nothing is recorded, so choosing videos later needs a new run |
 | `browser` | Optional. `chromium` (the default: the browser Playwright downloads), or `chrome` or `msedge` to use one already on the computer, for when that download is blocked |
-| `warnAt` | Optional. The number of screens or scenarios above which the size check warns. Defaults to 20 |
-| `pace` | Optional. The shortest pause after each step in milliseconds, for the videos. Defaults to 700. A step's caption always stays up long enough to read, up to four seconds |
+| `warnAt` | Optional. Where the size check starts to recommend a split. Defaults to `{ "scenarios": 12, "screens": 8, "requirements": 8 }`. Give any of the three, or one number for all of them |
+| `pace` | Optional. The shortest pause around each step in milliseconds, for the videos. Defaults to 700. A step's caption is shown before the step starts, long enough to read. A pointer moves to each control, text is typed a key at a time and the page scrolls as needed, so the video looks like a person using the prototype |
 
 ## requirements.json
 
@@ -49,19 +49,23 @@ handoff/HELP-12/
     { "id": "R1", "text": "A visitor can send a message with their name, email and text.", "source": "stated" },
     { "id": "R4", "text": "If sending fails, the visitor keeps their message.", "source": "inferred" }
   ],
-  "openQuestions": ["No loading state is designed for sending. Is one needed?"]
+  "openQuestions": ["No loading state is designed for sending. Is one needed?"],
+  "assumed": ["Dialogs close on Escape and on a click outside them."]
 }
 ```
 
 `source` is `stated` when the ticket says it, and `inferred` when you took it from the
 design. Scenarios refer to requirements by `id` in their `covers` list.
 
+`assumed` is standard behaviour the handoff relies on and does not test, one sentence
+each. The handoff prints it once. Leave it empty when there is none.
+
 ## out/
 
 | File | What it is |
 |---|---|
-| `handoff.html` | The full handoff as one page, with the steps of every scenario and a screenshot of each screen and state, copy buttons on every section, and a user flow that can be zoomed and clicked |
-| `flow.png`, `flow.svg` | The user flow |
+| `handoff.html` | The full handoff as one page, with the steps of every scenario and a screenshot of each screen and state, copy buttons on every section, a list of contents, and a user flow that can be zoomed and clicked. With more than six scenarios, the passing ones start folded to one line each |
+| `flow.png`, `flow.svg` | The user flow: one column per screen, its states branching below, and one drawing per flow |
 | `screens/` | One full-page screenshot per screen, state and screen size |
 | `videos/` | One walkthrough video per flow and screen size, or one per scenario, as set by `videos`. One per flow needs `ffmpeg`; without it the program writes one per scenario and says so |
 | `features/` | One Gherkin feature file per flow |

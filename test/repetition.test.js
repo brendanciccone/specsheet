@@ -98,7 +98,7 @@ test('the handoff page shows each screenshot once, and points back to it after t
     const files = figures.map((match) => match[2]);
     assert.equal(new Set(files).size, files.length, 'no screenshot is shown twice');
     const ready = files.find((file) => file.includes('ready'));
-    const references = [...html.matchAll(/<p class="same-shot" data-file="([^"]+)">Same screen as <a href="#(shot-\d+)">step 1 of "Message is sent"<\/a>/g)];
+    const references = [...html.matchAll(/<a class="same-shot no-copy" data-file="([^"]+)" href="#(shot-\d+)"/g)];
     assert.equal(references.length, 2, 'the two later scenarios point back to the first one');
     for (const reference of references) {
       assert.equal(reference[1], ready);

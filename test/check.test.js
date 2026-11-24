@@ -100,18 +100,57 @@ test('counts a handoff and stays quiet below the threshold', () => {
     { requirements: 2, stated: 1, inferred: 1, flows: 1, scenarios: 3, steps: 3, screens: 3, states: 3, viewports: 1 },
   );
   assert.deepEqual(result.warnings, []);
-  assert.match(formatSizeCheck(result), /No warning/);
+  assert.match(formatSizeCheck(result), /No warning\. A split is recommended above 12 scenarios or 8 screens\.$/);
+  assert.match(formatSizeCheck(sizeCheck(handoffFolder(), { screens: 2 })), /or 8 requirements before scenarios are written\.$/);
 });
 
-test('warns, without blocking, beyond the threshold', () => {
-  const result = sizeCheck(handoffFolder({ scenarios: 21 }));
+test('recommends a split, without blocking, beyond the thresholds', () => {
+  assert.deepEqual(sizeCheck(handoffFolder({ scenarios: 8 })).warnings, []);
+
+  const screens = sizeCheck(handoffFolder({ scenarios: 9 }));
+  assert.match(screens.warnings[0], /^This story covers 9 screens\./);
+
+  const result = sizeCheck(handoffFolder({ scenarios: 13 }));
   assert.equal(result.warnings.length, 1);
-  assert.match(result.warnings[0], /21 screens and 21 scenarios/);
+  assert.match(result.warnings[0], /13 scenarios and 13 screens/);
+  assert.match(result.warnings[0], /Splitting it into smaller stories is recommended/);
   assert.match(formatSizeCheck(result), /WARNING/);
 });
 
-test('the threshold can be changed in the config', () => {
+test('the thresholds can be changed in the config, together or one at a time', () => {
+  const handoffNull = handoffFolder({ scenarios: 1 });
   assert.equal(sizeCheck(handoffFolder({ scenarios: 3, warnAt: 2 })).warnings.length, 1);
+  assert.deepEqual(sizeCheck(handoffFolder({ scenarios: 13, warnAt: 20 })).warnings, []);
+  const result = sizeCheck(handoffFolder({ scenarios: 9, warnAt: { screens: 30 } }));
+  assert.deepEqual(result.warnings, []);
+  assert.deepEqual(result.limits, { scenarios: 12, screens: 30, requirements: 8 });
+  assert.throws(() => sizeCheck(handoffFolder({ warnAt: { pages: 3 } })), /"warnAt" takes a number/);
+  // null means the usual limits, as leaving it out does.
+  fs.writeFileSync(path.join(handoffNull, 'specsheet.config.json'), JSON.stringify({ title: 'Test', warnAt: null }));
+  assert.deepEqual(sizeCheck(handoffNull).limits, { scenarios: 12, screens: 8, requirements: 8 });
+  for (const bad of [true, 'twelve', [12], { toString: 1 }, { scenarios: 0 }]) {
+    assert.throws(() => sizeCheck(handoffFolder({ warnAt: bad })), /"warnAt" takes a number/, JSON.stringify(bad));
+  }
+});
+
+test('a warning says where the story could be split', () => {
+  const dir = handoffFolder({ scenarios: 0, requirements: 2 });
+  fs.mkdirSync(path.join(dir, 'scenarios'));
+  const body = (count, covers) =>
+    Array.from({ length: count }, (_, index) => `scenario('S${covers}${index}', { covers: ['${covers}'] }, async ({ step }) => {
+      await step('Given a', { screen: 'a', state: 'ready' }, async () => {});
+    });`).join('\n');
+  fs.writeFileSync(path.join(dir, 'scenarios', 'a.scenario.js'), `flow('Sign in', () => {${body(9, 'R1')}});\nflow('Reset password', () => {${body(5, 'R2')}});`);
+  const text = formatSizeCheck(sizeCheck(dir));
+  assert.match(text, /It could be split by flow: "Sign in" \(9 scenarios\), "Reset password" \(5 scenarios\)\./);
+  assert.match(text, /Most scenarios go to: R1 \(9\), R2 \(5\)\./);
+});
+
+test('the early check recommends a split on requirements alone', () => {
+  assert.deepEqual(sizeCheck(handoffFolder({ requirements: 8 }), { screens: 3 }).warnings, []);
+  const result = sizeCheck(handoffFolder({ requirements: 9 }), { screens: 3 });
+  assert.match(result.warnings[0], /9 requirements/);
+  assert.match(formatSizeCheck(result), /Group the requirements by the screen or the goal/);
 });
 
 test('the early check uses the screen count Claude found in the design', () => {
@@ -120,8 +159,8 @@ test('the early check uses the screen count Claude found in the design', () => {
   assert.equal(quiet.counts.screens, 8);
   assert.deepEqual(quiet.warnings, []);
 
-  const loud = sizeCheck(handoffFolder(), { screens: 24 });
-  assert.match(loud.warnings[0], /24 screens/);
+  const loud = sizeCheck(handoffFolder(), { screens: 9 });
+  assert.match(loud.warnings[0], /9 screens/);
 });
 
 test('the early check says so when there are no requirements to count', () => {

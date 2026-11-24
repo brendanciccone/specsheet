@@ -81,7 +81,7 @@ function buildScenario(raw, staticScenario) {
   };
 }
 
-export function buildModel({ results, config, requirements, openQuestions, staticFlows = [] }) {
+export function buildModel({ results, config, requirements, openQuestions, assumed = [], staticFlows = [] }) {
   const staticByKey = new Map();
   for (const flow of staticFlows) {
     for (const scenario of flow.scenarios) staticByKey.set(`${flow.name}::${scenario.title}`, scenario);
@@ -102,6 +102,16 @@ export function buildModel({ results, config, requirements, openQuestions, stati
     }
     Object.assign(flow.notApplicable, raw.notApplicable ?? {});
     flow.scenarios.push(buildScenario(raw, staticByKey.get(`${raw.flow}::${raw.title}`)));
+  }
+
+  // Number the scenarios of each flow, so they can be referred to and found quickly.
+  // A scenario run at two screen sizes keeps one number.
+  for (const flow of flows) {
+    const numbers = new Map();
+    for (const scenario of flow.scenarios) {
+      if (!numbers.has(scenario.title)) numbers.set(scenario.title, numbers.size + 1);
+      scenario.number = numbers.get(scenario.title);
+    }
   }
 
   // Screens and states for each flow: what was declared, and what a passing step reached.
@@ -163,7 +173,14 @@ export function buildModel({ results, config, requirements, openQuestions, stati
     const covering = allScenarios.filter((scenario) => scenario.covers.includes(item.id));
     let status = 'not-covered';
     if (covering.length) status = covering.every((scenario) => scenario.status === 'passed') ? 'covered' : 'failing';
-    return { ...item, status, scenarios: [...new Set(covering.map((scenario) => scenario.title))] };
+    // Each covering scenario once, however many screen sizes it ran at. Two flows can
+    // have a scenario of the same name, so the flow is part of what identifies it.
+    const proof = [];
+    for (const scenario of covering) {
+      if (proof.some((entry) => entry.flow === scenario.flow && entry.title === scenario.title)) continue;
+      proof.push({ flow: scenario.flow, title: scenario.title, label: `${scenario.number}. ${scenario.title}` });
+    }
+    return { ...item, status, scenarios: proof.map((entry) => entry.label), proof };
   });
 
   const findings = { failedSteps: [], unverified: [], missingStates: [], uncovered: [], unknownIds: [], noSteps: [] };
@@ -231,6 +248,7 @@ export function buildModel({ results, config, requirements, openQuestions, stati
     },
     requirements: requirementRows,
     openQuestions,
+    assumed,
     flows,
     findings,
     errors: results.errors ?? [],

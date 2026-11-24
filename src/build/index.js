@@ -8,7 +8,7 @@ import { launchOptions, loadConfig, loadRequirements } from '../config.js';
 import { readStaticFlows } from '../check.js';
 import { fingerprint, readJson, slug, writeFile } from '../util.js';
 import { featureText } from './gherkin.js';
-import { renderFlowSvg } from './graph.js';
+import { FIT_LABELS, renderFlowSvg } from './graph.js';
 import { checklistMarkdown, commentSections, splitComment } from './markdown.js';
 import { buildModel, formatFindings } from './model.js';
 import { renderPage } from './page.js';
@@ -20,15 +20,48 @@ export function hasFfmpeg() {
   return spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0;
 }
 
+/**
+ * The moments a full-page screenshot was taken, in seconds from the start of a scenario's
+ * recording, with a margin either side. The page is still at those moments, so cutting
+ * them is not noticed, and it removes the squashed frame a screenshot can leave behind.
+ */
+export function shotCuts(steps) {
+  const cuts = [];
+  for (const step of steps ?? []) {
+    if (!Array.isArray(step.shotAt) || step.shotAt.length !== 2 || !step.shotAt.every(Number.isFinite)) continue;
+    // The recording can start a moment after the page is made, which puts everything a
+    // little earlier in the video than on the clock. So the cut starts well before.
+    const from = Math.max(0, step.shotAt[0] / 1000 - 0.6);
+    const to = step.shotAt[1] / 1000 + 0.45;
+    const last = cuts[cuts.length - 1];
+    if (last && from <= last[1]) last[1] = Math.max(last[1], to);
+    else cuts.push([from, to]);
+  }
+  // A paced recording opens on an empty white page for a frame or two, before the
+  // scenario's title card is up. Take that off the front as well.
+  if (cuts.length) {
+    if (cuts[0][0] <= 0.12) cuts[0][0] = 0;
+    else cuts.unshift([0, 0.12]);
+  }
+  return cuts.map(([from, to]) => [Number(from.toFixed(2)), Number(to.toFixed(2))]);
+}
+
+/** The ffmpeg filter that leaves the cuts out of a video and closes the gaps. Empty when there are none. */
+export function cutFilter(cuts) {
+  if (!cuts.length) return '';
+  return `select='not(${cuts.map(([from, to]) => `between(t,${from},${to})`).join('+')})',setpts=N/FRAME_RATE/TB,`;
+}
+
 /** Copy a recording into the output folder, as MP4 when ffmpeg is available. */
-function exportVideo(source, target, useFfmpeg) {
+function exportVideo(source, target, useFfmpeg, cuts = []) {
   fs.mkdirSync(path.dirname(target), { recursive: true });
   if (useFfmpeg) {
     const mp4 = `${target}.mp4`;
+    const keep = cutFilter(cuts);
     const result = spawnSync(
       'ffmpeg',
       ['-y', '-loglevel', 'error', '-i', source, '-c:v', 'libx264', '-pix_fmt', 'yuv420p',
-        '-vf', 'pad=ceil(iw/2)*2:ceil(ih/2)*2', '-movflags', '+faststart', '-an', mp4],
+        '-vf', `${keep}pad=ceil(iw/2)*2:ceil(ih/2)*2`, '-movflags', '+faststart', '-an', mp4],
       { stdio: 'ignore' },
     );
     if (result.status === 0 && fs.existsSync(mp4)) return mp4;
@@ -57,7 +90,7 @@ function videoSeconds(file) {
  * Join recordings into one MP4, in order. Returns the file, its length, and the second
  * at which each recording starts, or null when it could not be done.
  */
-function joinVideos(sources, target, workDir) {
+function joinVideos(sources, target, workDir, cuts = []) {
   fs.rmSync(workDir, { recursive: true, force: true });
   fs.mkdirSync(workDir, { recursive: true });
   try {
@@ -65,7 +98,7 @@ function joinVideos(sources, target, workDir) {
     const starts = [];
     let seconds = 0;
     for (const [index, source] of sources.entries()) {
-      const part = exportVideo(source, path.join(workDir, `part-${index}`), true);
+      const part = exportVideo(source, path.join(workDir, `part-${index}`), true, cuts[index]);
       const length = part.endsWith('.mp4') ? videoSeconds(part) : null;
       if (length === null) return null;
       parts.push(part);
@@ -118,6 +151,8 @@ async function renderPng(svg, file, width, browserName) {
   try {
     const page = await browser.newPage({ viewport: { width: Math.ceil(width), height: 600 }, deviceScaleFactor: 2 });
     await page.setContent(`<body style="margin:0;background:#fff">${svg}</body>`);
+    // Fit each label's box to its words as this browser draws them.
+    await page.evaluate(`${FIT_LABELS}(document)`);
     await page.locator('svg').screenshot({ path: file });
   } finally {
     await browser.close();
@@ -144,7 +179,7 @@ export async function build(dir, { png = true, videos, log = () => {} } = {}) {
   }
 
   const config = loadConfig(dir);
-  const { requirements, openQuestions } = loadRequirements(dir);
+  const { requirements, openQuestions, assumed } = loadRequirements(dir);
   const results = readJson(resultsFile);
   for (const scenario of results.scenarios ?? []) {
     if (scenario.video) scenario.video = path.resolve(out, scenario.video);
@@ -152,7 +187,7 @@ export async function build(dir, { png = true, videos, log = () => {} } = {}) {
       if (step.screenshot) step.screenshot = path.resolve(out, step.screenshot);
     }
   }
-  const model = buildModel({ results, config, requirements, openQuestions, staticFlows: readStaticFlows(dir) });
+  const model = buildModel({ results, config, requirements, openQuestions, assumed, staticFlows: readStaticFlows(dir) });
 
   for (const folder of ['screens', 'videos', 'features']) {
     fs.rmSync(path.join(out, folder), { recursive: true, force: true });
@@ -225,6 +260,9 @@ export async function build(dir, { png = true, videos, log = () => {} } = {}) {
     if (scenarios.length && !scenarios.some((scenario) => scenario.video && fs.existsSync(scenario.video))) {
       log('The last run recorded no video, so there are no videos. Run again with videos on to record them.');
     }
+    if (!useFfmpeg && scenarios.some((scenario) => shotCuts(scenario.steps).length)) {
+      log('ffmpeg is not installed, so the moment each screenshot is taken could not be cut from the videos. The picture can jump there.');
+    }
     if (videoMode === 'flow' && !useFfmpeg) {
       log('ffmpeg is not installed, so the scenarios could not be joined into one video per flow. Wrote one video per scenario.');
     }
@@ -242,7 +280,12 @@ export async function build(dir, { png = true, videos, log = () => {} } = {}) {
             'videos',
             videoName(`${slug(flow.name)}.${slug(viewport.name)}`, [flow.name, viewport.name].join('\n')),
           );
-          const joined = joinVideos(recorded.map((scenario) => scenario.video), base, path.join(out, '.run', 'join'));
+          const joined = joinVideos(
+            recorded.map((scenario) => scenario.video),
+            base,
+            path.join(out, '.run', 'join'),
+            recorded.map((scenario) => shotCuts(scenario.steps)),
+          );
           if (joined) {
             const file = path.relative(out, joined.file).split(path.sep).join('/');
             const video = { file, path: joined.file, viewport, viewportLabel: recorded[0].viewportLabel, seconds: joined.seconds };
@@ -265,7 +308,7 @@ export async function build(dir, { png = true, videos, log = () => {} } = {}) {
               [flow.name, scenario.title, viewport.name].join('\n'),
             ),
           );
-          const file = exportVideo(scenario.video, base, useFfmpeg);
+          const file = exportVideo(scenario.video, base, useFfmpeg, shotCuts(scenario.steps));
           scenario.videoFile = path.relative(out, file).split(path.sep).join('/');
           scenario.videoPath = file;
           add(file, `Video of "${scenario.title}" (${scenario.viewportLabel})`, 'video');

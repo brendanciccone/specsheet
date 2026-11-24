@@ -14,7 +14,7 @@ flow(
         await expect(page.getByRole('heading', { name: 'Contact us' })).toBeVisible();
       });
 
-      await step('When I send a message with my name, email and text', { screen: 'help/contact', state: 'sent' }, async () => {
+      await step('When I send a message with my name, email and text', { screen: 'help/contact', state: 'sent', decision: 'Can the message be sent?', answer: 'Yes' }, async () => {
         await page.getByLabel('Name').fill('Sam Rivera');
         await page.getByLabel('Email').fill('sam@example.com');
         await page.getByLabel('Message').fill('How do I export my projects?');
@@ -33,7 +33,7 @@ flow(
         await expect(page.getByRole('heading', { name: 'Contact us' })).toBeVisible();
       });
 
-      await step('When I send a message with an email that has no @', { screen: 'help/contact', state: 'invalid-email' }, async () => {
+      await step('When I send a message with an email that has no @', { screen: 'help/contact', state: 'invalid-email', decision: 'Can the message be sent?', answer: 'No: email not valid' }, async () => {
         await page.getByLabel('Name').fill('Sam Rivera');
         await page.getByLabel('Email').fill('sam.example.com');
         await page.getByLabel('Message').fill('How do I export my projects?');
@@ -53,7 +53,7 @@ flow(
         await expect(page.getByRole('heading', { name: 'Contact us' })).toBeVisible();
       });
 
-      await step('When I send a valid message while the server is down', { screen: 'help/contact', state: 'send-failed' }, async () => {
+      await step('When I send a valid message while the server is down', { screen: 'help/contact', state: 'send-failed', decision: 'Can the message be sent?', answer: 'No: server fails' }, async () => {
         await page.route('**/api/contact', (route) => route.fulfill({ status: 500, body: 'Server error' }));
         await page.getByLabel('Name').fill('Sam Rivera');
         await page.getByLabel('Email').fill('sam@example.com');

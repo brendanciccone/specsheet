@@ -44,6 +44,9 @@ In the project that holds your design, ask Claude:
 
 > Hand off the contact form for HELP-12.
 
+Or type `/specsheet:specsheet HELP-12`. Both start the same skill, in Claude Code in the
+terminal or in the desktop app's Code tab.
+
 For a design in Figma or Paper, run it in your product's codebase and include the link:
 
 > Hand off PROJ-123. The design is in Figma: \<link to the frames\>
@@ -61,6 +64,23 @@ for your approval, writes and runs the scenarios, and goes through what it found
 You get `handoff/HELP-12/out/handoff.html`: one file with the screenshots and video
 inside, and a copy button on every section. Claude can also post it to Jira as a
 comment, always after showing you a preview.
+
+## Update
+
+To get a new version of the plugin, refresh the marketplace and update it from a
+terminal, then restart Claude Code:
+
+```bash
+claude plugin marketplace update specsheet
+```
+
+```bash
+claude plugin update specsheet@specsheet
+```
+
+That is all you do. The next time you ask for a handoff in a project, the skill checks
+the version of the program that project has. If it is older than the skill needs, it
+says so and, on your yes, runs the install command again to bring it up to date.
 
 ## See it first
 

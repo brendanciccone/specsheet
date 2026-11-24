@@ -33,7 +33,7 @@ Claude runs these for you.
 | `specsheet doctor [folder]` | Says whether this computer has what a run needs: a browser that starts, video recording, and `ffmpeg` for the single walkthrough video |
 | `specsheet version` | Prints the version |
 | `specsheet init <folder>` | Creates a handoff folder with starter files |
-| `specsheet check <folder>` | Counts what the handoff contains and warns if it is very large. Never blocks |
+| `specsheet check <folder>` | Counts what the handoff contains. Above 12 scenarios or 8 screens, or 8 requirements before any scenario is written, it recommends splitting the story and says where. Never blocks |
 | `specsheet run <folder> [--fast]` | Runs every scenario, then builds the handoff files. `--fast` skips the pauses and captions, for use while fixing findings |
 | `specsheet build <folder>` | Rebuilds the handoff files from the last run, without running anything again |
 
@@ -85,17 +85,18 @@ Everything lands in `out/` inside the handoff folder.
 
 | File | What it is |
 |---|---|
-| `handoff.html` | The full handoff as one page, with a copy button on every section. The user flow can be zoomed and dragged, and any screenshot opens full size. The screenshots and videos are inside the file, so it can be sent on its own. Each screenshot appears once: a later step on the same screen links back to it |
-| `flow.png` | The user flow: screens and states as boxes, actions as arrows |
+| `handoff.html` | The full handoff as one page, with a list of contents and a copy button on every section. With more than six scenarios, the passing ones start folded to one line each. The user flow can be zoomed and dragged, and any screenshot opens full size. The screenshots and videos are inside the file, so it can be sent on its own. Each screenshot appears once: a later step on the same screen links back to it |
+| `flow.png` | The user flow. One column per screen, with its states as boxes: the state you arrive on at the top, and the states it can turn into branching below. Arrows are actions. A decision the scenarios name is a yellow badge with its question in it, and one branch per answer. Actions that go back are written under the state they start from, not drawn. Each flow gets its own drawing |
 | `screens/` | One full-page screenshot per screen, state and screen size |
-| `videos/` | One captioned walkthrough video per flow, every scenario in order |
+| `videos/` | One captioned walkthrough video per flow, every scenario in order. Each scenario opens on a card with its number and name. Each step's caption comes up first, then the step is done at the speed of a person, with a pointer that moves to each control: scrolling, typing, clicking |
 | `features/` | One Gherkin feature file per flow, for QA to import. Steps that every scenario opens with are written once, as a `Background` |
 | `checklist.md` | The acceptance checklist |
 | `comment.md` | The text for a Jira comment, split into parts if it is too long for one |
 | `manifest.json` | Every file to attach, with its size |
 
 Joining scenarios into one video needs `ffmpeg`. Without it, the program writes one WebM
-video per scenario and says how to install it. After installing it, `specsheet build`
+video per scenario and says how to install it. `ffmpeg` also cuts the moment each
+screenshot is taken out of the video, where the picture can jump. After installing it, `specsheet build`
 remakes the videos without running anything again.
 
 ## Behind a firewall

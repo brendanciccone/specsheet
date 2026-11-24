@@ -12,6 +12,14 @@ export const VIDEO_MODES = ['flow', 'scenario', 'none'];
 /** chromium is the browser Playwright downloads. chrome and msedge are ones already on the computer. */
 export const BROWSERS = ['chromium', 'chrome', 'msedge'];
 
+/**
+ * Where the size check starts to recommend splitting the story. Past these, a handoff is
+ * slow to read and the flow is hard to follow. It only ever recommends: nothing is blocked.
+ */
+export const WARN_AT = { scenarios: 12, screens: 8, requirements: 8 };
+
+const WARN_AT_HELP = `${CONFIG_FILE}: "warnAt" takes a number, or "scenarios", "screens" and "requirements" as numbers.`;
+
 export const DEFAULTS = {
   title: '',
   ticket: null, // { key, url }
@@ -21,7 +29,7 @@ export const DEFAULTS = {
   viewports: [{ name: 'Desktop', width: 1440, height: 900 }],
   data: 'mock', // 'mock' | 'real'
   format: 'gherkin', // 'gherkin' | 'checklist'
-  warnAt: 20,
+  warnAt: WARN_AT, // a number sets all three
   commentLimit: JIRA_COMMENT_LIMIT,
   videos: 'flow', // 'flow' (one walkthrough per flow) | 'scenario' (one per scenario) | 'none' (nothing is recorded)
   browser: 'chromium', // 'chromium' (Playwright's own download) | 'chrome' | 'msedge' (already installed)
@@ -58,6 +66,18 @@ export function loadConfig(dir) {
       throw new Error(`${CONFIG_FILE}: each viewport needs a name, a width and a height.`);
     }
   }
+  // No value, or null, means the usual limits.
+  config.warnAt ??= WARN_AT;
+  if (typeof config.warnAt === 'number') {
+    config.warnAt = { scenarios: config.warnAt, screens: config.warnAt, requirements: config.warnAt };
+  } else {
+    const plain = config.warnAt !== null && typeof config.warnAt === 'object' && !Array.isArray(config.warnAt);
+    if (!plain) throw new Error(WARN_AT_HELP);
+    config.warnAt = { ...WARN_AT, ...config.warnAt };
+  }
+  for (const [key, value] of Object.entries(config.warnAt)) {
+    if (!Object.hasOwn(WARN_AT, key) || !Number.isFinite(value) || value < 1) throw new Error(WARN_AT_HELP);
+  }
   if (!['mock', 'real'].includes(config.data)) {
     throw new Error(`${CONFIG_FILE}: "data" must be "mock" or "real".`);
   }
@@ -76,10 +96,11 @@ export function loadConfig(dir) {
 /**
  * requirements.json:
  * { "requirements": [{ "id": "R1", "text": "...", "source": "stated" | "inferred" }],
- *   "openQuestions": ["..."] }
+ *   "openQuestions": ["..."],
+ *   "assumed": ["Standard behaviour that is relied on and not written as a scenario"] }
  */
 export function loadRequirements(dir) {
-  const raw = readJson(path.join(dir, REQUIREMENTS_FILE), { requirements: [], openQuestions: [] });
+  const raw = readJson(path.join(dir, REQUIREMENTS_FILE), { requirements: [], openQuestions: [], assumed: [] });
   const requirements = (raw.requirements ?? []).map((item, index) => {
     if (!item.id || !item.text) {
       throw new Error(`${REQUIREMENTS_FILE}: requirement ${index + 1} needs an "id" and a "text".`);
@@ -90,5 +111,9 @@ export function loadRequirements(dir) {
     }
     return { id: String(item.id), text: String(item.text), source };
   });
-  return { requirements, openQuestions: (raw.openQuestions ?? []).map(String) };
+  return {
+    requirements,
+    openQuestions: (raw.openQuestions ?? []).map(String),
+    assumed: (raw.assumed ?? []).map(String),
+  };
 }
