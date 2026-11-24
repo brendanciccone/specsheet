@@ -39,7 +39,7 @@ handoff/HELP-12/
 | `videos` | `flow` (one walkthrough video per flow, the default), `scenario` (one per scenario) or `none`. With `none` nothing is recorded, so choosing videos later needs a new run |
 | `browser` | Optional. `chromium` (the default: the browser Playwright downloads), or `chrome` or `msedge` to use one already on the computer, for when that download is blocked |
 | `warnAt` | Optional. Where the size check starts to recommend a split. Defaults to `{ "scenarios": 12, "screens": 8, "requirements": 8 }`. Give any of the three, or one number for all of them |
-| `pace` | Optional. The shortest pause around each step in milliseconds, for the videos. Defaults to 700. A step's caption is shown before the step starts, long enough to read. Text is typed a key at a time and the page scrolls to each control, so the video looks like a person using the prototype |
+| `pace` | Optional. The shortest pause around each step in milliseconds, for the videos. Defaults to 700. A step's caption is shown before the step starts, long enough to read. A pointer moves to each control, text is typed a key at a time and the page scrolls as needed, so the video looks like a person using the prototype |
 
 ## requirements.json
 

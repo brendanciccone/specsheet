@@ -24,10 +24,11 @@ function video(viewport) {
     mode: 'on',
     size: { width: viewport.width, height: viewport.height },
     show: {
-      // Highlight what is clicked or typed into. The step captions come from the scenario helper.
+      // Highlight what is clicked or typed into. The step captions and the pointer come
+      // from the scenario helper, so Playwright's own pointer is off.
       actions: {
         duration: Math.max(300, pace),
-        cursor: 'pointer',
+        cursor: 'none',
         style: {
           highlight: 'outline: 3px solid #7F77DD; background: rgba(127, 119, 221, 0.12); border-radius: 6px',
           point: 'width: 22px; height: 22px; border-radius: 50%; background: rgba(239, 159, 39, 0.75)',

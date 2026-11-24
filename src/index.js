@@ -61,6 +61,61 @@ export function leadTime(text, pace) {
 }
 
 const HUMAN = Symbol.for('specsheet.human');
+
+// The pointer drawn in the video. A recording has no mouse pointer of its own, so
+// without one, things on the page seem to press themselves.
+// It is drawn with plain shapes, since the recording's overlay does not take pictures.
+const ARROW = 'polygon(0 0, 0 78%, 21% 61%, 36% 96%, 50% 90%, 36% 56%, 64% 56%)';
+const POINTER =
+  '<div style="position:relative;width:30px;height:30px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))">' +
+  `<div style="position:absolute;inset:0;background:#fff;clip-path:${ARROW}"></div>` +
+  `<div style="position:absolute;left:2px;top:3.5px;width:24px;height:24px;background:#111;clip-path:${ARROW}"></div></div>`;
+const pointers = new WeakMap();
+
+function pointerHtml(from, to, ms) {
+  const at = (point) => `translate(${Math.round(point.x)}px,${Math.round(point.y)}px)`;
+  const name = `specsheet-pointer-${Date.now()}`;
+  return (
+    `<style>@keyframes ${name}{from{transform:${at(from)}}to{transform:${at(to)}}}</style>` +
+    `<div style="position:fixed;left:-1px;top:-1px;pointer-events:none;transform:${at(to)};` +
+    `animation:${name} ${ms}ms cubic-bezier(.35,.05,.25,1) both">${POINTER}</div>`
+  );
+}
+
+/** Move the drawn pointer to a point on the screen, taking longer the further it has to go. */
+async function movePointer(page, to) {
+  if (!page.screencast?.showOverlay) return;
+  const size = page.viewportSize() ?? { width: 1280, height: 720 };
+  const state = pointers.get(page) ?? { at: { x: size.width * 0.55, y: size.height * 0.62 }, overlay: null };
+  pointers.set(page, state);
+  const distance = Math.hypot(to.x - state.at.x, to.y - state.at.y);
+  const ms = distance < 4 ? 0 : Math.round(Math.min(750, Math.max(260, 180 + distance * 0.55)));
+  try {
+    const next = await page.screencast.showOverlay(pointerHtml(state.at, to, ms));
+    await state.overlay?.dispose?.().catch(() => {});
+    state.overlay = next;
+    state.at = to;
+    if (ms) await page.waitForTimeout(ms + 90);
+  } catch {
+    // No pointer in the video is not a reason to fail a step.
+  }
+}
+
+/** Put the pointer back where it was, after a new page or a screenshot took it away. */
+async function restorePointer(page) {
+  const state = pointers.get(page);
+  if (state) await movePointer(page, state.at);
+}
+
+/** A ring that spreads from the pointer when it clicks. */
+function clickHtml(point) {
+  const name = `specsheet-click-${Date.now()}`;
+  return (
+    `<style>@keyframes ${name}{from{transform:scale(.3);opacity:.9}to{transform:scale(1);opacity:0}}</style>` +
+    `<div style="position:fixed;left:${Math.round(point.x) - 18}px;top:${Math.round(point.y) - 18}px;width:36px;height:36px;` +
+    `border-radius:50%;border:3px solid #4a3fb8;pointer-events:none;animation:${name} 420ms ease-out both"></div>`
+  );
+}
 const TYPED = ['text', 'email', 'search', 'tel', 'url', 'password', ''];
 
 /**
@@ -73,8 +128,9 @@ function humanize(page) {
   if (proto[HUMAN]) return;
   proto[HUMAN] = true;
 
-  // Scroll smoothly to a control that is off screen or under the caption, as a person would.
-  const approach = async (locator) => {
+  // Scroll smoothly to a control that is off screen or under the caption, as a person
+  // would, then move the pointer onto it.
+  const approach = async (locator, options, press) => {
     try {
       const moved = await locator.evaluate(
         (element) => {
@@ -86,7 +142,15 @@ function humanize(page) {
         null,
         { timeout: 1500 },
       );
-      if (moved) await locator.page().waitForTimeout(450);
+      const view = locator.page();
+      if (moved) await view.waitForTimeout(450);
+      const box = await locator.boundingBox({ timeout: 1500 });
+      if (!box) return;
+      const point = options?.position
+        ? { x: box.x + options.position.x, y: box.y + options.position.y }
+        : { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      await movePointer(view, point);
+      if (press) await view.screencast?.showOverlay?.(clickHtml(point), { duration: 450 }).catch(() => {});
     } catch {
       // Not there yet, or not scrollable: the action itself will wait and report.
     }
@@ -96,7 +160,8 @@ function humanize(page) {
     const original = proto[name];
     if (typeof original !== 'function') continue;
     proto[name] = async function (...args) {
-      await approach(this);
+      const options = args.find((item) => item && typeof item === 'object' && !Array.isArray(item) && 'position' in item);
+      await approach(this, options, name !== 'hover');
       return original.apply(this, args);
     };
   }
@@ -271,6 +336,7 @@ export const test = base.extend({
           const moved = page.url() !== before;
           await caption?.dispose?.().catch(() => {});
           caption = await showCaption(page, record.title);
+          if (moved) await restorePointer(page);
           const acted = record.durationMs - (before !== 'about:blank' ? leadTime(record.title, pace) : 0) > 400;
           const hold = moved || !acted ? readingTime(record.title, pace) : Math.max(pace, 900);
           await page.waitForTimeout(hold).catch(() => {});
