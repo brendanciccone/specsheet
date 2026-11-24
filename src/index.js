@@ -10,7 +10,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { test as base, expect } from '@playwright/test';
+import { test as base, expect as baseExpect } from '@playwright/test';
 import { loadConfig } from './config.js';
 import { cleanError, escapeHtml, keywordOf, stripKeyword } from './util.js';
 
@@ -24,15 +24,18 @@ function runConfig() {
   return cachedConfig;
 }
 
-/** The caption shown at the bottom of the video while a step runs. */
-function captionHtml(title) {
+/**
+ * The caption shown at the bottom of the video while a step runs. It fades in, unless
+ * it is `still`: one that takes the place of the same caption, which must not blink.
+ */
+function captionHtml(title, still = false) {
   const keyword = keywordOf(title);
   const rest = stripKeyword(title);
   const hasKeyword = rest !== title.trim();
   return (
     '<style>@keyframes specsheet-caption{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}</style>' +
     '<div style="position:fixed;left:0;right:0;bottom:28px;display:flex;justify-content:center;pointer-events:none;' +
-    'animation:specsheet-caption 180ms ease-out both">' +
+    `${still ? '' : 'animation:specsheet-caption 180ms ease-out both'}">` +
     '<div style="max-width:78%;padding:10px 18px;border-radius:10px;background:rgba(24,24,24,0.93);color:#e6e6e6;' +
     'font:500 18px/1.35 system-ui,-apple-system,Segoe UI,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,0.28)">' +
     (hasKeyword ? `<span style="color:#fff;font-weight:700">${escapeHtml(keyword)}</span> ` : '') +
@@ -130,55 +133,99 @@ function clickHtml(point) {
 }
 const TYPED = ['text', 'email', 'search', 'tel', 'url', 'password', ''];
 
+// Pages whose scenario is being recorded at a watchable pace.
+const paced = new WeakSet();
+
+/**
+ * Runs in the page. Scrolls smoothly to an element that is off screen, under the caption
+ * or outside the part of a scrolling panel that shows, and answers once the page has
+ * stopped moving. Answers false when the element is already in view. `wait` is how long
+ * to stay on what is showing now before leaving it.
+ */
+function scrollToward(element, wait) {
+  const box = element.getBoundingClientRect();
+  if (!box.width && !box.height) return false;
+  const top = 70;
+  const bottom = window.innerHeight - 130;
+  let block = 'center';
+  let inView = box.top >= top && box.bottom <= bottom;
+  if (box.height > bottom - top) {
+    // Taller than the screen: it is in view once it fills half of it.
+    inView = Math.min(box.bottom, window.innerHeight) - Math.max(box.top, 0) >= window.innerHeight * 0.5;
+    block = 'start';
+  }
+  // Inside a panel that scrolls on its own, it also has to be in the part the panel shows.
+  for (let node = element.parentElement; inView && node && node !== document.documentElement; node = node.parentElement) {
+    if (!/auto|scroll/.test(getComputedStyle(node).overflowY)) continue;
+    const frame = node.getBoundingClientRect();
+    if (box.top < frame.top - 1 || box.bottom > frame.bottom + 1) inView = false;
+  }
+  if (inView) return false;
+  // Wait until the page has stopped moving, so the pointer goes to where the element
+  // ends up and nothing is clicked while it is still sliding.
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      element.scrollIntoView({ behavior: 'smooth', block, inline: 'nearest' });
+      const started = performance.now();
+      let last = null;
+      let still = 0;
+      const check = () => {
+        const now = element.getBoundingClientRect().top;
+        still = now === last ? still + 1 : 0;
+        last = now;
+        if (still >= 6 || performance.now() - started > 2200) resolve(true);
+        else requestAnimationFrame(check);
+      };
+      requestAnimationFrame(check);
+    }, wait);
+  });
+}
+
+/**
+ * Bring what a step uses or checks into view, the way a person scrolls to it. `look` is
+ * for a check: a moment on what is showing before the page moves, and a moment on what
+ * it moved to, so each thing a step checks is seen.
+ */
+async function bringIntoView(locator, timeout, look = false) {
+  try {
+    const moved = await locator.evaluate(scrollToward, look ? 380 : 0, { timeout });
+    if (moved) await locator.page().waitForTimeout(look ? 420 : 140);
+    return moved;
+  } catch {
+    // Not there yet, or not scrollable: the action or the check will wait and report.
+    return false;
+  }
+}
+
 /**
  * Make the actions in a paced run look like a person doing them, for the video: scroll to
  * a control before using it, and type text a key at a time. Every change falls back to
  * what Playwright does on its own, so a scenario behaves the same as in a fast run.
  */
 function humanize(page) {
+  paced.add(page);
   const proto = Object.getPrototypeOf(page.locator('html'));
   if (proto[HUMAN]) return;
   proto[HUMAN] = true;
 
-  // Scroll smoothly to a control that is off screen or under the caption, as a person
-  // would, then move the pointer onto it.
+  // Scroll to the control, then move the pointer onto it and, for a press, let it rest
+  // there for a moment first, as a hand does.
   const approach = async (locator, options, press) => {
     try {
-      const moved = await locator.evaluate(
-        (element) => {
-          const box = element.getBoundingClientRect();
-          if (box.top >= 70 && box.bottom <= window.innerHeight - 130) return false;
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          // Wait until the page has stopped moving, so the pointer goes to where the
-          // control ends up and nothing is clicked while it is still sliding.
-          return new Promise((resolve) => {
-            const started = performance.now();
-            let last = null;
-            let still = 0;
-            const check = () => {
-              const top = element.getBoundingClientRect().top;
-              still = top === last ? still + 1 : 0;
-              last = top;
-              if (still >= 6 || performance.now() - started > 1400) resolve(true);
-              else requestAnimationFrame(check);
-            };
-            requestAnimationFrame(check);
-          });
-        },
-        null,
-        { timeout: 2500 },
-      );
+      await bringIntoView(locator, 3000);
       const view = locator.page();
-      if (moved) await view.waitForTimeout(120);
       const box = await locator.boundingBox({ timeout: 1500 });
       if (!box) return;
       const point = options?.position
         ? { x: box.x + options.position.x, y: box.y + options.position.y }
         : { x: box.x + box.width / 2, y: box.y + box.height / 2 };
       await movePointer(view, point);
-      if (press) await view.screencast?.showOverlay?.(clickHtml(point), { duration: 450 }).catch(() => {});
+      if (!press) return;
+      await view.waitForTimeout(110);
+      await view.screencast?.showOverlay?.(clickHtml(point), { duration: 450 }).catch(() => {});
+      await view.waitForTimeout(70);
     } catch {
-      // Not there yet, or not scrollable: the action itself will wait and report.
+      // Not there yet: the action itself will wait and report.
     }
   };
 
@@ -188,6 +235,16 @@ function humanize(page) {
     proto[name] = async function (...args) {
       const options = args.find((item) => item && typeof item === 'object' && !Array.isArray(item) && 'position' in item);
       await approach(this, options, name !== 'hover');
+      return original.apply(this, args);
+    };
+  }
+
+  // Actions with no press of their own still happen where the viewer can see them.
+  for (const name of ['press', 'pressSequentially', 'type', 'focus', 'clear', 'setInputFiles', 'dragTo']) {
+    const original = proto[name];
+    if (typeof original !== 'function') continue;
+    proto[name] = async function (...args) {
+      await bringIntoView(this, 3000);
       return original.apply(this, args);
     };
   }
@@ -210,7 +267,13 @@ function humanize(page) {
         // The text has been typed. Check it only if the field is still there: a field
         // that takes its last character and goes away, such as a one-time code, is done.
         const now = await this.inputValue({ timeout: 800 }).catch(() => null);
-        if (now === null || now === text) return;
+        if (now === null || now === text) {
+          // A breath before the hand moves on to the next thing.
+          await this.page().waitForTimeout(160).catch(() => {});
+          return;
+        }
+      } else {
+        await bringIntoView(this, 1500);
       }
     } catch {
       // Fall through to the plain fill, which waits for the field and reports any problem.
@@ -219,9 +282,61 @@ function humanize(page) {
   };
 }
 
-async function showCaption(page, title) {
+// Checks that pass with nothing on the page to look at.
+const UNSEEN = ['toBeHidden', 'toHaveScreenshot', 'toMatchAriaSnapshot'];
+
+/**
+ * In a paced run, a check that passes scrolls to what it checked, so the video shows the
+ * thing the step is about. Nothing else about the check changes, and a check that fails
+ * is left exactly as it was.
+ */
+function shown(matchers, locator) {
+  return new Proxy(matchers, {
+    get(target, name) {
+      const value = Reflect.get(target, name);
+      if (typeof value !== 'function' || typeof name !== 'string' || !name.startsWith('to') || UNSEEN.includes(name)) return value;
+      return (...args) => {
+        const outcome = value.apply(target, args);
+        if (typeof outcome?.then !== 'function') return outcome;
+        if (name === 'toHaveCount' && args[0] === 0) return outcome;
+        return outcome.then(async (result) => {
+          await bringIntoView(locator.first(), 400, true);
+          return result;
+        });
+      };
+    },
+  });
+}
+
+const isLocator = (value) => typeof value?.page === 'function' && typeof value?.first === 'function' && typeof value?.evaluate === 'function';
+
+function watching(value) {
   try {
-    return (await page.screencast?.showOverlay?.(captionHtml(title))) ?? null;
+    return isLocator(value) && paced.has(value.page());
+  } catch {
+    return false;
+  }
+}
+
+/** Playwright's `expect`. In a paced run it also brings what was checked into view. */
+export const expect = new Proxy(baseExpect, {
+  apply(target, self, args) {
+    const matchers = Reflect.apply(target, self, args);
+    return watching(args[0]) ? shown(matchers, args[0]) : matchers;
+  },
+  get(target, name) {
+    const value = Reflect.get(target, name);
+    if (name !== 'soft' || typeof value !== 'function') return value;
+    return (...args) => {
+      const matchers = value.apply(target, args);
+      return watching(args[0]) ? shown(matchers, args[0]) : matchers;
+    };
+  },
+});
+
+async function showCaption(page, title, still = false) {
+  try {
+    return (await page.screencast?.showOverlay?.(captionHtml(title, still))) ?? null;
   } catch {
     return null;
   }
@@ -395,8 +510,11 @@ export const test = base.extend({
           // The caption stays as it is, so it does not blink. Only a new page needs it
           // put back, along with the pointer.
           if (moved || !caption) {
-            await caption?.dispose?.().catch(() => {});
-            caption = await showCaption(page, record.title);
+            // The new one goes up before the old one comes down, and without the fade,
+            // so a caption that survived the change of page is not seen to change.
+            const old = caption;
+            caption = await showCaption(page, record.title, Boolean(old));
+            await old?.dispose?.().catch(() => {});
           }
           if (moved) await restorePointer(page);
           const acted = record.durationMs - (led ? leadTime(record.title, pace) : 0) > 400;
@@ -512,5 +630,3 @@ export function scenario(title, options, body) {
     },
   );
 }
-
-export { expect };

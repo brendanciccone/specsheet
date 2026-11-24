@@ -120,3 +120,15 @@ export function clock(seconds) {
   const whole = Math.floor(seconds);
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
 }
+
+/**
+ * An open question as the outputs use it. requirements.json gives either a line of text,
+ * or the question with who can answer it and what is built if nobody does.
+ */
+export function openQuestion(item) {
+  const words = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);
+  if (item && typeof item === 'object') {
+    return { question: words(item.question) ?? '', who: words(item.who), default: words(item.default) };
+  }
+  return { question: String(item ?? '').trim(), who: null, default: null };
+}

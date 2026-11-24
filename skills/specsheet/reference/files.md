@@ -39,7 +39,7 @@ handoff/HELP-12/
 | `videos` | `flow` (one walkthrough video per flow, the default), `scenario` (one per scenario) or `none`. With `none` nothing is recorded, so choosing videos later needs a new run |
 | `browser` | Optional. `chromium` (the default: the browser Playwright downloads), or `chrome` or `msedge` to use one already on the computer, for when that download is blocked |
 | `warnAt` | Optional. Where the size check starts to recommend a split. Defaults to `{ "scenarios": 12, "screens": 8, "requirements": 8 }`. Give any of the three, or one number for all of them |
-| `pace` | Optional. The shortest pause around each step in milliseconds, for the videos. Defaults to 700. A step's caption is shown before the step starts, long enough to read. A pointer moves to each control, text is typed a key at a time and the page scrolls as needed, so the video looks like a person using the prototype |
+| `pace` | Optional. The shortest pause around each step in milliseconds, for the videos. Defaults to 700. A step's caption is shown before the step starts, long enough to read. A pointer moves to each control, text is typed a key at a time, and the page scrolls to what a step uses and to what it checks, so the video looks like a person using the prototype |
 
 ## requirements.json
 
@@ -47,15 +47,29 @@ handoff/HELP-12/
 {
   "requirements": [
     { "id": "R1", "text": "A visitor can send a message with their name, email and text.", "source": "stated" },
-    { "id": "R4", "text": "If sending fails, the visitor keeps their message.", "source": "inferred" }
+    { "id": "R4", "text": "If sending fails, the visitor keeps their message.", "source": "inferred",
+      "note": "The error stays until the next try. The design does not say when it goes away." }
   ],
-  "openQuestions": ["No loading state is designed for sending. Is one needed?"],
+  "openQuestions": [
+    { "question": "Should the form show that it is sending while it waits?", "who": "Design",
+      "default": "No sending state. The button stays as it is until the reply comes." }
+  ],
   "assumed": ["Dialogs close on Escape and on a click outside them."]
 }
 ```
 
 `source` is `stated` when the ticket says it, and `inferred` when you took it from the
 design. Scenarios refer to requirements by `id` in their `covers` list.
+
+`note` is optional: a decision you made where the ticket and the design did not say. The
+handoff prints it under the requirement, so the reader can overrule it.
+
+`openQuestions` holds only what a person has to settle. Each has the `question`, ending
+in a question mark, `who` can answer it, and the `default`: what was built and what stays
+if nobody answers. It belongs here only when neither the ticket nor the design answers
+it and a different answer would change what gets built or tested. A plain line of text
+is accepted too, and `specsheet check` then notes what it lacks. Most handoffs have none
+to three.
 
 `assumed` is standard behaviour the handoff relies on and does not test, one sentence
 each. The handoff prints it once. Leave it empty when there is none.

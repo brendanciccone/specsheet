@@ -6,6 +6,10 @@
     { "id": "R4", "text": "If sending fails, the visitor sees an error and their message is kept.", "source": "inferred" }
   ],
   "openQuestions": [
-    "No loading state is designed for while a message is being sent. Is one needed?"
+    {
+      "question": "Should the form show that it is sending while it waits for the reply?",
+      "who": "Design",
+      "default": "No sending state. The button stays as it is until the reply comes."
+    }
   ]
 }

@@ -562,3 +562,36 @@ test('a caption stays up long enough to read, and never less than the pace', asy
   assert.equal(readingTime('Given I am on the Help page', 700), 700 + 45 * 27);
   assert.equal(readingTime('x'.repeat(200), 700), 4000);
 });
+
+test('an open question says who to ask and what is built if nobody answers', async () => {
+  const { renderPage } = await import('../src/build/page.js');
+  const openQuestions = [{ question: 'Is a receipt emailed?', who: 'Product', default: 'No receipt is sent.' }, 'Is a receipt needed?'];
+  const built = buildModel({ results: results(), config, requirements, openQuestions, staticFlows });
+  // A plain line and a full question come out in the same shape.
+  assert.deepEqual(built.openQuestions[1], { question: 'Is a receipt needed?', who: null, default: null });
+
+  const comment = commentSections(built, []).join('\n');
+  assert.match(comment, /1\. Is a receipt emailed\?\n   - Ask: Product\n   - If unanswered: No receipt is sent\.\n2\. Is a receipt needed\?/);
+  const page = renderPage(built, { flowImage: null });
+  assert.match(page, /<li>Is a receipt emailed\?<span class="question-detail">Ask: Product<\/span><span class="question-detail">If unanswered: No receipt is sent\.<\/span><\/li>/);
+  assert.match(page, /<li>Is a receipt needed\?<\/li>/);
+  assert.match(page, /Open questions \(2\)/);
+});
+
+test('a decision made on a requirement is printed with it', async () => {
+  const { renderPage } = await import('../src/build/page.js');
+  const noted = requirements.map((item) => (item.id === 'R2' ? { ...item, note: 'The error stays until the card is changed.' } : item));
+  const built = buildModel({ results: results(), config, requirements: noted, staticFlows });
+  assert.match(commentSections(built, []).join('\n'), /\n\nNotes:\n- R2: The error stays until the card is changed\.\n/);
+  assert.match(renderPage(built, { flowImage: null }), /<span class="req-note">Note: The error stays until the card is changed\.<\/span>/);
+  // No notes, no heading for them.
+  assert.doesNotMatch(commentSections(model(), []).join('\n'), /Notes:/);
+});
+
+test('user flow: an action is told apart from an answer by its colour', () => {
+  const svg = renderFlowSvg(model());
+  // Every action label sits in the box the legend calls "An action".
+  assert.match(svg, /class="edge-label-box"\/>/);
+  assert.match(svg, />An action</);
+  assert.match(svg, /\.edge-label-box \{ fill: #e6f0ff;/);
+});

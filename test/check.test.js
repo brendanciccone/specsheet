@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { formatSizeCheck, parseScenarioSource, sizeCheck } from '../src/check.js';
+import { formatSizeCheck, parseScenarioSource, questionNotes, sizeCheck } from '../src/check.js';
+import { loadRequirements } from '../src/config.js';
 
 const SOURCE = `
 import { expect, flow, scenario } from 'specsheet';
@@ -97,7 +98,7 @@ test('counts a handoff and stays quiet below the threshold', () => {
   assert.equal(result.early, false);
   assert.deepEqual(
     { ...result.counts },
-    { requirements: 2, stated: 1, inferred: 1, flows: 1, scenarios: 3, steps: 3, screens: 3, states: 3, viewports: 1 },
+    { requirements: 2, stated: 1, inferred: 1, flows: 1, scenarios: 3, steps: 3, screens: 3, states: 3, viewports: 1, openQuestions: 0 },
   );
   assert.deepEqual(result.warnings, []);
   assert.match(formatSizeCheck(result), /No warning\. A split is recommended above 12 scenarios or 8 screens\.$/);
@@ -166,4 +167,36 @@ test('the early check uses the screen count Claude found in the design', () => {
 test('the early check says so when there are no requirements to count', () => {
   const result = sizeCheck(handoffFolder({ requirements: 0 }), { screens: 4 });
   assert.ok(result.notes.some((note) => note.includes('screen count alone')));
+});
+
+test('an open question has to be one a person can answer', () => {
+  const dir = handoffFolder({ scenarios: 1 });
+  const file = path.join(dir, 'requirements.json');
+  const write = (openQuestions) => fs.writeFileSync(file, JSON.stringify({ requirements: [{ id: 'R1', text: 'Pay by card', note: ' Cards only. ' }], openQuestions }));
+
+  write([{ question: 'Is a receipt emailed?', who: 'Product', default: 'No receipt is sent.' }]);
+  const good = sizeCheck(dir);
+  assert.equal(good.counts.openQuestions, 1);
+  assert.deepEqual(good.notes, []);
+  assert.match(formatSizeCheck(good), /\n  1 open question\n/);
+  // A note on a requirement is kept, trimmed.
+  assert.equal(loadRequirements(dir).requirements[0].note, 'Cards only.');
+
+  // A plain line is still read, and the check says what it lacks.
+  write(['No loading state is designed.', { question: 'Is a receipt emailed?', who: 'Product' }]);
+  const notes = sizeCheck(dir).notes;
+  assert.ok(notes.some((note) => /^Open question 1: not written as a question/.test(note)), notes.join('\n'));
+  assert.ok(notes.some((note) => /^Open question 1: missing "who"/.test(note)));
+  assert.ok(notes.some((note) => /^Open questions 1, 2: missing "default"/.test(note)));
+
+  write([{ who: 'Product' }]);
+  assert.throws(() => sizeCheck(dir), /open question 1 needs a "question"/);
+});
+
+test('many open questions are called out, with where the rest belong', () => {
+  const ask = (count) => Array.from({ length: count }, (_, index) => ({ question: `Question ${index + 1}?`, who: 'Design', default: 'As drawn.' }));
+  assert.deepEqual(questionNotes(ask(5)), []);
+  const [note] = questionNotes(ask(6));
+  assert.match(note, /^6 open questions is a lot/);
+  assert.match(note, /"note".*"assumed".*designer/);
 });

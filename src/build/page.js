@@ -12,6 +12,7 @@ import {
   commentSections,
   filesMarkdown,
   problemLines,
+  questionDetails,
   questionsMarkdown,
   rebuiltNote,
   requirementSource,
@@ -51,6 +52,19 @@ main { max-width: 880px; margin: 0 auto; padding: 36px 20px 96px; }
 .toc ul ul a { display: flex; gap: 6px; padding-left: 10px; color: var(--muted); line-height: 1.35; }
 .toc ul ul a.current { color: var(--accent); }
 .mark { flex: none; width: 14px; text-align: center; font-weight: 700; }
+/* On a narrow screen the contents are one row of tabs that stays at the top and scrolls sideways. */
+@media (max-width: 1239px) {
+  .toc { position: sticky; top: 0; z-index: 5; max-width: none; padding: 0; background: var(--page); border-bottom: 1px solid var(--line); }
+  .toc-title { display: none; }
+  .toc > ul { flex-wrap: nowrap; gap: 0; max-width: 880px; margin: 0 auto; padding: 0 28px 0 10px; overflow-x: auto; overscroll-behavior-x: contain;
+    scrollbar-width: none; -webkit-mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 28px), transparent 100%);
+    mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 28px), transparent 100%); }
+  .toc > ul::-webkit-scrollbar { display: none; }
+  .toc > ul > li { flex: none; }
+  .toc > ul > li > a { padding: 11px 10px 9px; color: var(--muted); font-weight: 500; white-space: nowrap; border-bottom: 2px solid transparent; border-radius: 0; }
+  .toc > ul > li > a:hover { background: none; color: var(--ink); }
+  .toc > ul > li > a.current { background: none; color: var(--ink); font-weight: 500; border-bottom-color: var(--accent); }
+}
 @media (min-width: 1240px) {
   body { display: grid; grid-template-columns: 260px minmax(0, 880px); justify-content: center; column-gap: 28px; }
   main { margin: 0; width: 100%; }
@@ -107,6 +121,7 @@ table.facts th { width: 150px; }
 .scenario-body .tools { float: right; margin: 0 0 8px 12px; }
 .scenario figure img { max-height: 460px; }
 section, article { scroll-margin-top: 12px; }
+@media (max-width: 1239px) { section, article, .scenario { scroll-margin-top: 58px; } }
 details.fold > summary { display: flex; align-items: center; gap: 6px; cursor: pointer; margin-bottom: 10px; color: var(--accent); list-style: none; }
 details.fold > summary::-webkit-details-marker { display: none; }
 .scenario-meta { margin: 4px 0 12px; color: var(--muted); font-size: 14px; }
@@ -125,6 +140,12 @@ figure img { display: block; max-width: 100%; height: auto; border: 1px solid va
 figcaption { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; color: var(--muted); font-size: 13px; }
 ul, ol { margin: 0 0 10px; padding-left: 22px; }
 li { margin-bottom: 4px; }
+@keyframes arrive { from { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 16%, transparent); }
+  to { background: transparent; box-shadow: 0 0 0 6px transparent; } }
+main section:target > .head, .scenario:target > details > summary { border-radius: 6px; animation: arrive 1.6s ease-out; }
+@media (prefers-reduced-motion: reduce) { main section:target > .head, .scenario:target > details > summary { animation: none; } }
+.req-note, .question-detail { display: block; margin-top: 2px; color: var(--muted); font-size: 14px; }
+.questions li + li { margin-top: 10px; }
 .note { padding: 10px 14px; background: var(--soft); border: 1px solid var(--line); border-radius: 8px; }
 footer { margin-top: 56px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
 .flow-viewer { display: none; }
@@ -183,6 +204,75 @@ const VIEW_SCRIPT = `
     if (playing && playing.catch) playing.catch(function () {});
   });
 
+  // ----- Contents: mark the part of the page being read -----
+  var toc = document.querySelector('.toc');
+  var tabs = toc.querySelector('ul');
+  var links = {};
+  toc.querySelectorAll('a').forEach(function (link) { links[link.getAttribute('href').slice(1)] = link; });
+  var parts = [].slice.call(document.querySelectorAll('main section[id], main article[id]')).filter(function (part) { return links[part.id]; });
+  var marked = [];
+  // The part a link was just followed to. It stays marked until the reader scrolls
+  // away, even when the page is too short to bring it to the top of the screen.
+  var chosen = null;
+  var landed = 0;
+  // Keep the marked link where it can be seen: in the row of tabs, or in a long list.
+  function keep(link) {
+    var box = link.getBoundingClientRect();
+    if (toc.offsetWidth >= document.documentElement.clientWidth) {
+      var frame = tabs.getBoundingClientRect();
+      tabs.scrollTo({ left: tabs.scrollLeft + box.left - frame.left - (frame.width - box.width) / 2, behavior: 'smooth' });
+    } else if (box.top < 8 || box.bottom > toc.clientHeight - 8) {
+      toc.scrollTop += box.top - (toc.clientHeight - box.height) / 2;
+    }
+  }
+  function mark() {
+    var current = [];
+    if (chosen && Math.abs(window.scrollY - landed) > 8) chosen = null;
+    if (chosen) {
+      for (var node = chosen; node; node = node.parentElement) {
+        if (node.id && links[node.id]) current.unshift(links[node.id]);
+      }
+    } else {
+      // A part is being read once it reaches the top of the screen. Near the end of the
+      // page nothing more can reach the top, so the line it has to cross moves down the
+      // screen instead, and the last short parts each get their turn.
+      var bar = toc.offsetWidth >= document.documentElement.clientWidth ? toc.offsetHeight : 0;
+      var line = bar + 48;
+      var room = document.documentElement.scrollHeight - window.innerHeight;
+      var reach = Math.min(window.innerHeight, room);
+      var left = room - window.scrollY;
+      if (reach > 0 && left < reach) line += (window.innerHeight - line) * (1 - Math.max(0, left) / reach);
+      if (parts.length) line = Math.min(line, parts[parts.length - 1].getBoundingClientRect().bottom - 1);
+      parts.forEach(function (part) {
+        var box = part.getBoundingClientRect();
+        if (box.top <= line && box.bottom > line) current.push(links[part.id]);
+      });
+    }
+    var same = current.length === marked.length && current.every(function (link, index) { return link === marked[index]; });
+    if (same) return;
+    marked.forEach(function (link) { link.classList.remove('current'); link.removeAttribute('aria-current'); });
+    current.forEach(function (link) { link.classList.add('current'); });
+    var row = toc.offsetWidth >= document.documentElement.clientWidth;
+    if (current.length) {
+      current[current.length - 1].setAttribute('aria-current', 'location');
+      keep(row ? current[0] : current[current.length - 1]);
+    } else if (row) {
+      // Back above the first part: the row of tabs goes back to its start.
+      tabs.scrollTo({ left: 0, behavior: 'smooth' });
+    }
+    marked = current;
+  }
+  var waiting = false;
+  window.addEventListener('scroll', function () {
+    if (waiting) return;
+    waiting = true;
+    requestAnimationFrame(function () { waiting = false; mark(); });
+  }, { passive: true });
+  window.addEventListener('resize', mark);
+  // Opening or folding a scenario moves the page without scrolling it.
+  document.addEventListener('toggle', mark, true);
+  mark();
+
   // ----- Folded scenarios -----
   // A link to something inside a folded scenario opens it first.
   function reveal(target) {
@@ -200,6 +290,9 @@ const VIEW_SCRIPT = `
     var inner = target.querySelector(':scope > details');
     if (inner) inner.open = true;
     target.scrollIntoView();
+    chosen = links[target.id] || target.closest('main section[id], main article[id]') ? target : null;
+    landed = window.scrollY;
+    mark();
   }
   window.addEventListener('hashchange', follow);
   follow();
@@ -229,31 +322,6 @@ const VIEW_SCRIPT = `
     folded.forEach(function (fold) { fold.open = false; });
     folded = [];
   });
-
-  // ----- Contents: mark the part of the page being read -----
-  var links = {};
-  document.querySelectorAll('.toc a').forEach(function (link) { links[link.getAttribute('href').slice(1)] = link; });
-  var marked = [];
-  function mark() {
-    var line = window.innerHeight * 0.3;
-    var current = [];
-    document.querySelectorAll('main section[id], main article[id]').forEach(function (part) {
-      var box = part.getBoundingClientRect();
-      if (box.top <= line && box.bottom > line && links[part.id]) current.push(links[part.id]);
-    });
-    marked.forEach(function (link) { link.classList.remove('current'); });
-    current.forEach(function (link) { link.classList.add('current'); });
-    marked = current;
-  }
-  var waiting = false;
-  window.addEventListener('scroll', function () {
-    if (waiting) return;
-    waiting = true;
-    requestAnimationFrame(function () { waiting = false; mark(); });
-  }, { passive: true });
-  // Opening or folding a scenario moves the page without scrolling it.
-  document.addEventListener('toggle', mark, true);
-  mark();
 
   // ----- Full-size screenshots -----
   var box = document.querySelector('.lightbox');
@@ -788,7 +856,7 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
   const requirementRows = model.requirements
     .map(
       (item) =>
-        `<tr><td>${escapeHtml(item.id)}</td><td>${escapeHtml(item.text)}</td><td>${escapeHtml(requirementSource(item.source))}</td>` +
+        `<tr><td>${escapeHtml(item.id)}</td><td>${escapeHtml(item.text)}${item.note ? `<span class="req-note">Note: ${escapeHtml(item.note)}</span>` : ''}</td><td>${escapeHtml(requirementSource(item.source))}</td>` +
         `<td class="${statusClass(item.status)}">${escapeHtml(requirementStatus(item.status))}</td>` +
         `<td>${item.proof.map((entry) => `<a href="#${scenarioIds.get(`${entry.flow}\n${entry.title}`)}">${escapeHtml(entry.label)}</a>`).join('; ') || 'None'}</td></tr>`,
     )
@@ -918,7 +986,14 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
   parts.push(
     `<section id="questions" data-block="questions">${head('Open questions')}` +
       (model.openQuestions.length
-        ? `<ol>${model.openQuestions.map((question) => `<li>${escapeHtml(question)}</li>`).join('')}</ol>`
+        ? `<ol class="questions">${model.openQuestions
+            .map(
+              (entry) =>
+                `<li>${escapeHtml(entry.question)}${questionDetails(entry)
+                  .map((line) => `<span class="question-detail">${escapeHtml(line)}</span>`)
+                  .join('')}</li>`,
+            )
+            .join('')}</ol>`
         : '<p>None.</p>') +
       '</section>',
   );

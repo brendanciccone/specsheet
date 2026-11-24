@@ -131,6 +131,38 @@ function splitHints(flows, requirements, limits) {
   return hints;
 }
 
+// More open questions than this is more than a reader will answer.
+const QUESTIONS_AT = 5;
+
+/**
+ * What to put right in the open questions. Each is for a person to answer, so it has to
+ * be a question, name who can answer it, and say what is built if nobody does.
+ */
+export function questionNotes(questions) {
+  const notes = [];
+  const numbers = (test) =>
+    questions
+      .map((entry, index) => (test(entry) ? index + 1 : 0))
+      .filter(Boolean)
+      .join(', ');
+  const lacks = [
+    [(entry) => !entry.question.includes('?'), 'not written as a question. If it is a decision you made, it goes in the "note" of the requirement it belongs to'],
+    [(entry) => !entry.who, 'missing "who": the person or role that can answer it'],
+    [(entry) => !entry.default, 'missing "default": what is built if nobody answers'],
+  ];
+  for (const [test, problem] of lacks) {
+    const list = numbers(test);
+    if (list) notes.push(`Open ${list.includes(',') ? 'questions' : 'question'} ${list}: ${problem}.`);
+  }
+  if (questions.length > QUESTIONS_AT) {
+    notes.push(
+      `${questions.length} open questions is a lot to ask of a reader. Keep the ones whose answer changes what is built or tested. ` +
+        'A decision you made goes in a requirement\'s "note", standard behaviour in "assumed", and a place where the design disagrees with itself goes to the designer.',
+    );
+  }
+  return notes;
+}
+
 /**
  * Count what the handoff contains and decide whether to warn.
  * `screens` is the number of screens Claude counted in the design, for the early check
@@ -138,7 +170,7 @@ function splitHints(flows, requirements, limits) {
  */
 export function sizeCheck(dir, { screens: screensHint } = {}) {
   const config = loadConfig(dir);
-  const { requirements } = loadRequirements(dir);
+  const { requirements, openQuestions } = loadRequirements(dir);
   const flows = readStaticFlows(dir);
 
   const scenarios = flows.flatMap((flow) => flow.scenarios);
@@ -175,6 +207,7 @@ export function sizeCheck(dir, { screens: screensHint } = {}) {
     screens: screenCount,
     states: states.size,
     viewports: config.viewports.length,
+    openQuestions: openQuestions.length,
   };
 
   const warnings = [];
@@ -203,6 +236,7 @@ export function sizeCheck(dir, { screens: screensHint } = {}) {
   if (counts.viewports > 1) {
     notes.push(`${counts.viewports} screen sizes are set, so every scenario runs ${counts.viewports} times.`);
   }
+  notes.push(...questionNotes(openQuestions));
 
   return { early, counts, commentChars, warnings, notes, limits };
 }
@@ -221,6 +255,7 @@ export function formatSizeCheck(result) {
     lines.push(`  ${plural(counts.screens, 'screen')}, ${plural(counts.states, 'state')}`);
     lines.push(`  Ticket text: about ${result.commentChars.toLocaleString('en-US')} characters`);
   }
+  if (counts.openQuestions) lines.push(`  ${plural(counts.openQuestions, 'open question')}`);
   for (const warning of result.warnings) lines.push(`  WARNING: ${warning}`);
   for (const note of result.notes) lines.push(`  Note: ${note}`);
   if (!result.warnings.length) {

@@ -1,6 +1,6 @@
 // Turns the raw results of a run into the model every output is rendered from.
 
-import { resolveKeywords, viewportLabel } from '../util.js';
+import { openQuestion, resolveKeywords, viewportLabel } from '../util.js';
 
 const stateKey = (screen, state) => `${screen}/${state ?? ''}`;
 
@@ -81,7 +81,7 @@ function buildScenario(raw, staticScenario) {
   };
 }
 
-export function buildModel({ results, config, requirements, openQuestions, assumed = [], staticFlows = [] }) {
+export function buildModel({ results, config, requirements, openQuestions = [], assumed = [], staticFlows = [] }) {
   const staticByKey = new Map();
   for (const flow of staticFlows) {
     for (const scenario of flow.scenarios) staticByKey.set(`${flow.name}::${scenario.title}`, scenario);
@@ -247,7 +247,7 @@ export function buildModel({ results, config, requirements, openQuestions, assum
       ranAt: results.finishedAt,
     },
     requirements: requirementRows,
-    openQuestions,
+    openQuestions: openQuestions.map(openQuestion),
     assumed,
     flows,
     findings,
