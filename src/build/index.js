@@ -29,7 +29,9 @@ export function shotCuts(steps) {
   const cuts = [];
   for (const step of steps ?? []) {
     if (!Array.isArray(step.shotAt) || step.shotAt.length !== 2 || !step.shotAt.every(Number.isFinite)) continue;
-    const from = Math.max(0, step.shotAt[0] / 1000 - 0.2);
+    // The recording can start a moment after the page is made, which puts everything a
+    // little earlier in the video than on the clock. So the cut starts well before.
+    const from = Math.max(0, step.shotAt[0] / 1000 - 0.6);
     const to = step.shotAt[1] / 1000 + 0.45;
     const last = cuts[cuts.length - 1];
     if (last && from <= last[1]) last[1] = Math.max(last[1], to);

@@ -448,7 +448,7 @@ test('the video: a caption leads its step, and screenshot moments are cut', asyn
   assert.equal(leadTime('When I send a message with my name, email and text', 700), 350 + 22 * 50);
   assert.equal(leadTime('x'.repeat(300), 700), 1800);
   // Two screenshots close together become one cut. Steps with no full-page screenshot have none.
-  assert.deepEqual(shotCuts([{ shotAt: [4000, 4300] }, {}, { shotAt: [4600, 4900] }, { shotAt: [9000, 9200] }]), [[0, 0.12], [3.8, 5.35], [8.8, 9.65]]);
+  assert.deepEqual(shotCuts([{ shotAt: [4000, 4300] }, {}, { shotAt: [4600, 4900] }, { shotAt: [9000, 9200] }]), [[0, 0.12], [3.4, 5.35], [8.4, 9.65]]);
   assert.deepEqual(shotCuts([]), []);
   // A step whose times are missing or broken is left out, not turned into a bad cut.
   assert.deepEqual(shotCuts([{ shotAt: [] }, { shotAt: [1000] }, { shotAt: [1000, null] }, { shotAt: ['a', 'b'] }]), []);

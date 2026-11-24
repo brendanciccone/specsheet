@@ -491,7 +491,9 @@ export function scenario(title, options, body) {
         // is left alone, and that scenario has no card.
         const card = await page
           .evaluate((html) => {
-            if (location.href !== 'about:blank' || document.body.childElementCount) return false;
+            // Empty means nothing to read or see. The recorder may have put its own
+            // empty holder in the page, which does not count.
+            if (location.href !== 'about:blank' || document.body.innerText.trim() || document.querySelector('img, canvas, video, svg, input, button')) return false;
             document.documentElement.style.background = '#1a1a1a';
             const holder = document.createElement('div');
             holder.id = 'specsheet-title-card';
