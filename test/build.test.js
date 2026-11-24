@@ -141,7 +141,7 @@ test('user flow: one node per screen and state, one arrow per action', () => {
   for (const node of graph.nodes) assert.ok(layout.positions.has(node.id));
   const svg = renderFlowSvg(model());
   assert.match(svg, /^<svg /);
-  assert.match(svg, /I pay with a valid card/);
+  assert.match(svg, /I pay with a valid/);
 });
 
 // A flow with branches inside a screen, a way back, and a change nobody asked for.
@@ -227,13 +227,49 @@ test('user flow: a decision is drawn once, with a branch per answer', () => {
   assert.match(svg, />No</);
 });
 
-test('user flow: a preview has the shape of the screen it shows', () => {
-  const graph = buildGraph(branching(), 'Desktop');
-  const desktop = layoutGraph(graph, { width: 1440, height: 900 }).size;
-  const phone = layoutGraph(graph, { width: 390, height: 844 }).size;
-  assert.equal(desktop.thumb, 125);
-  assert.ok(phone.thumb > desktop.thumb * 2, 'a phone screen is drawn tall');
-  assert.ok(phone.thumb <= 300);
+test('user flow: a preview has the shape of its own screenshot', async () => {
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specsheet-shape-'));
+  try {
+    // Only the size in a PNG's header is read, so a header is enough.
+    const png = (name, width, height) => {
+      const head = Buffer.alloc(24);
+      head.write('\x89PNG\r\n\x1a\n', 0, 'latin1');
+      head.writeUInt32BE(13, 8);
+      head.write('IHDR', 12, 'ascii');
+      head.writeUInt32BE(width, 16);
+      head.writeUInt32BE(height, 20);
+      const file = path.join(dir, name);
+      fs.writeFileSync(file, head);
+      return file;
+    };
+    const graph = buildGraph(branching(), 'Desktop');
+    const node = (id) => graph.nodes.find((item) => item.id === id);
+    node('cart/ready').shot = png('page.png', 1440, 900);
+    node('pay/ready').shot = png('dialog.png', 1440, 480);
+    node('done/ready').shot = png('long.png', 1440, 6000);
+
+    const desktop = layoutGraph(graph, { width: 1440, height: 900 });
+    const size = (id) => desktop.sizes.get(id);
+    assert.equal(desktop.boxWidth, 250);
+    assert.equal(size('cart/ready').thumb, Math.round((230 * 900) / 1440));
+    assert.ok(size('pay/ready').thumb < size('cart/ready').thumb, 'a short screenshot gets a short box');
+    assert.equal(size('done/ready').thumb, 276, 'a very long page stops at a limit');
+    assert.equal(size('done/ready').cut, true);
+    assert.equal(size('cart/ready').cut, false);
+    // No screenshot: the proportions of the screen size.
+    assert.equal(size('cart/promo').thumb, size('cart/ready').thumb);
+    // States below a tall box start below it.
+    assert.ok(desktop.positions.get('pay/sending').y >= desktop.positions.get('pay/ready').y + size('pay/ready').height);
+
+    const phone = layoutGraph(graph, { width: 390, height: 844 });
+    assert.equal(phone.boxWidth, 190, 'a phone screen gets a narrower box');
+    assert.ok(phone.sizes.get('cart/promo').thumb > 300, 'and a taller one');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('user flow: each flow gets its own drawing', () => {

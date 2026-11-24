@@ -4,18 +4,22 @@
 import fs from 'node:fs';
 import { escapeHtml, stripKeyword } from '../util.js';
 
-const NODE = { width: 220, text: 44 };
-// The preview keeps the shape of the screen it shows, within these heights, so a phone
-// screen is drawn tall and a desktop one wide.
-const THUMB = { min: 110, max: 300 };
+// A state's box is wider for a wide screen and narrower for a phone, the way frames sit
+// on a design canvas.
+const NODE = { wide: 250, narrow: 190, text: 46 };
+// Sizes of the words on the drawing, and the width one character takes at each.
+const TEXT = { label: 14, labelChar: 7.4, labelLine: 17, chip: 13, chipChar: 6.9, name: 16, nameChar: 8.9 };
+// A preview shows the whole screenshot, in its own proportions, up to this many times its
+// width. Past that it is cut at the bottom and fades out, to say there is more.
+const THUMB = { min: 96, wide: 1.2, narrow: 2.2 };
 // A decision: a small diamond with its question beside it, and one branch per answer.
-const DECISION = { offset: 60, radius: 15, row: 56, branch: 36, width: 310 };
+const DECISION = { offset: 60, radius: 16, row: 60, branch: 40, width: 340 };
 // How far a state sits to the right of the state it branches from. The action is
 // written on that stretch of line, so it has to hold a short label.
-const INDENT = 196;
-const LANE = { pad: 14, head: 34, gap: 26 };
-const GUTTER = { label: 176, lane: 14, stub: 30 };
-const CHIP = { line: 15, pad: 6 };
+const INDENT = 204;
+const LANE = { pad: 14, head: 40, gap: 28 };
+const GUTTER = { label: 190, lane: 14, stub: 30 };
+const CHIP = { line: 16, pad: 7 };
 const PAD = 32;
 const HEADER = 64;
 const TRUNK = 16;
@@ -138,12 +142,40 @@ function laneOrder(graph, byId) {
   return order;
 }
 
-/** The size of a state's box. The preview takes the proportions of the screen size. */
-function nodeSize(viewport) {
-  const inner = NODE.width - 20;
-  const ratio = viewport?.width && viewport?.height ? viewport.height / viewport.width : 0.64;
-  const thumb = Math.round(Math.min(THUMB.max, Math.max(THUMB.min, inner * ratio)));
-  return { width: NODE.width, thumb, height: thumb + NODE.text };
+/** The width and height of a PNG file, read from its first bytes. */
+function pngSize(file) {
+  try {
+    const handle = fs.openSync(file, 'r');
+    const head = Buffer.alloc(24);
+    fs.readSync(handle, head, 0, 24, 0);
+    fs.closeSync(handle);
+    if (head.toString('ascii', 12, 16) !== 'IHDR') return null;
+    return { width: head.readUInt32BE(16), height: head.readUInt32BE(20) };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The size of each state's box. Its preview has the proportions of its own screenshot, so
+ * a long page is drawn long and a dialog short, and a state with no screenshot takes the
+ * proportions of the screen size.
+ */
+function nodeSizes(graph, viewport) {
+  const portrait = Boolean(viewport?.width && viewport?.height && viewport.height > viewport.width);
+  const width = portrait ? NODE.narrow : NODE.wide;
+  const inner = width - 20;
+  const screen = viewport?.width && viewport?.height ? viewport.height / viewport.width : 0.64;
+  const limit = inner * (portrait ? THUMB.narrow : THUMB.wide);
+  const sizes = new Map();
+  for (const node of graph.nodes) {
+    const image = node.shot ? pngSize(node.shot) : null;
+    const full = inner * (image ? image.height / image.width : screen);
+    // A real screenshot keeps its shape even when it is short. Only an empty box has a least height.
+    const thumb = Math.round(Math.min(limit, Math.max(image ? 56 : THUMB.min, full)));
+    sizes.set(node.id, { width, thumb, height: thumb + NODE.text, cut: full > limit + 1 });
+  }
+  return { width, sizes };
 }
 
 /**
@@ -155,7 +187,8 @@ function nodeSize(viewport) {
  * state, so a busy flow does not become a knot of crossing lines.
  */
 export function layoutGraph(graph, viewport) {
-  const size = nodeSize(viewport);
+  const { width: boxWidth, sizes } = nodeSizes(graph, viewport);
+  const chipRoom = Math.floor((boxWidth - TRUNK - 14) / TEXT.chipChar);
   const byId = new Map(graph.nodes.map((node) => [node.id, node]));
   const screens = laneOrder(graph, byId);
   const laneOf = (id) => screens.indexOf(byId.get(id).screen);
@@ -206,14 +239,14 @@ export function layoutGraph(graph, viewport) {
         } else if (laneOf(pair.to) > index) {
           forward.push(pair);
         } else {
-          for (const label of pair.labels) chips.get(node.id).push(wrap(`↩ ${label} → ${backText(pair)}`, 31, 3));
+          for (const label of pair.labels) chips.get(node.id).push(wrap(`↩ ${label} → ${backText(pair)}`, chipRoom, 3));
         }
       }
       // Decisions come last, so the line down to the other states does not pass through them.
       const questions = [...new Set(out.filter((pair) => pair.decision).map((pair) => pair.decision.question))];
       for (const question of questions) {
         const answers = out.filter((pair) => pair.decision?.question === question);
-        const decision = { from: node.id, question, lines: wrap(question, 32, 3), main: answers.some((pair) => pair.main), branches: [] };
+        const decision = { from: node.id, question, lines: wrap(question, 30, 3), main: answers.some((pair) => pair.main), branches: [] };
         decisions.push(decision);
         rows.push({ kind: 'decision', decision });
         for (const pair of answers) {
@@ -241,7 +274,7 @@ export function layoutGraph(graph, viewport) {
       rows.push({ kind: 'node', node });
     }
     const asks = rows.some((row) => row.kind === 'decision');
-    return { screen, index, rows, width: Math.max(size.width + deepest * INDENT, asks ? DECISION.width : 0) };
+    return { screen, index, rows, width: Math.max(boxWidth + deepest * INDENT, asks ? DECISION.width : 0) };
   });
 
   // Arrows that pass over a whole screen travel above the lanes, each at its own height.
@@ -273,7 +306,7 @@ export function layoutGraph(graph, viewport) {
         const lines = chips.get(node.id).reduce((sum, chip) => sum + chip.length, 0);
         const extra = lines ? lines * CHIP.line + chips.get(node.id).length * 3 + CHIP.pad : 0;
         positions.set(node.id, { x: x + LANE.pad + depth.get(node.id) * INDENT, y, lane: index, column: index, depth: depth.get(node.id) });
-        y += size.height + extra + (next && next.kind !== 'node' ? 8 : LANE.gap);
+        y += sizes.get(node.id).height + extra + (next && next.kind !== 'node' ? 8 : LANE.gap);
       } else if (row.kind === 'decision') {
         const from = positions.get(row.decision.from);
         row.decision.x = from.x + DECISION.offset;
@@ -296,7 +329,8 @@ export function layoutGraph(graph, viewport) {
   for (const band of bands) band.height = bottom - top;
 
   return {
-    size,
+    boxWidth,
+    sizes,
     positions,
     bands,
     tree,
@@ -362,16 +396,16 @@ function route(points, radius = 10) {
 }
 
 /** An action, written on its arrow. `x` is the left edge of the label and `y` its middle. */
-function labelSvg(labels, x, y, max, tone = '') {
-  const lines = wrap(labels.join(' / '), max);
-  const width = Math.max(...lines.map((line) => line.length)) * 6.3 + 14;
-  const height = lines.length * 15 + 8;
+function labelSvg(labels, x, y, max, tone = '', maxLines = 3) {
+  const lines = wrap(labels.join(' / '), max, maxLines);
+  const width = Math.max(...lines.map((line) => line.length)) * TEXT.labelChar + 14;
+  const height = lines.length * TEXT.labelLine + 8;
   const auto = labels.length === 1 && labels[0] === AUTO;
   return (
     `<rect x="${x}" y="${y - height / 2}" width="${width}" height="${height}" rx="6" class="edge-label-box${tone ? ` answer-${tone}` : ''}"/>` +
     lines
       .map((line, index) => {
-        const lineY = y - ((lines.length - 1) * 15) / 2 + index * 15;
+        const lineY = y - ((lines.length - 1) * TEXT.labelLine) / 2 + index * TEXT.labelLine;
         return `<text x="${x + 7}" y="${lineY}" dominant-baseline="central" class="edge-label${auto ? ' edge-label-auto' : ''}${tone ? ` answer-text-${tone}` : ''}">${escapeHtml(line)}</text>`;
       })
       .join('')
@@ -387,13 +421,14 @@ function tone(answer) {
 
 /** Every arrow of a flow, and the labels that sit on them. */
 function edgesSvg(layout, marker) {
-  const { positions, size } = layout;
+  const { positions, sizes, boxWidth } = layout;
+  const tall = (id) => sizes.get(id).height;
   const paths = [];
   const labels = [];
   const draw = (points, main, arrow = true) => {
     paths.push(`<path d="${route(points)}" class="edge${main ? ' edge-main' : ''}"${arrow ? ` marker-end="url(#${marker})"` : ''}/>`);
   };
-  const middle = (id) => positions.get(id).y + size.height / 2;
+  const middle = (id) => positions.get(id).y + tall(id) / 2;
   const turn = (lane, key) => {
     const side = layout.bands[lane];
     return side.x + side.width + GUTTER.lane + GUTTER.label + 8 + layout.channels[lane].indexOf(key) * 12;
@@ -414,8 +449,8 @@ function edgesSvg(layout, marker) {
     const from = positions.get(pair.from);
     const to = positions.get(pair.to);
     const trunk = from.x + TRUNK;
-    draw([[trunk, from.y + size.height], [trunk, middle(pair.to)], [to.x - 7, middle(pair.to)]], pair.main);
-    labels.push(labelSvg(pair.labels, trunk + 12, middle(pair.to), 20));
+    draw([[trunk, from.y + tall(pair.from)], [trunk, middle(pair.to)], [to.x - 7, middle(pair.to)]], pair.main);
+    labels.push(labelSvg(pair.labels, trunk + 12, middle(pair.to), 18, '', 4));
   }
 
   // Forward to a later screen: right, along the gap between the lanes, and in from the left.
@@ -430,11 +465,11 @@ function edgesSvg(layout, marker) {
   for (const pair of plain) {
     const from = positions.get(pair.from);
     const list = leaving.get(pair.from);
-    const spread = Math.min(56, (size.height - 24) / list.length);
+    const spread = Math.min(66, (tall(pair.from) - 24) / list.length);
     const y1 = middle(pair.from) + (list.indexOf(pair) - (list.length - 1) / 2) * spread;
-    const x1 = from.x + size.width;
+    const x1 = from.x + boxWidth;
     draw([[x1, y1], ...onward(pair, from.lane, y1)], pair.main);
-    labels.push(labelSvg(pair.labels, x1 + 12, y1, 24));
+    labels.push(labelSvg(pair.labels, x1 + 12, y1, 22));
   }
 
   // Decisions: into the diamond from the state, and out of it once for each answer.
@@ -443,19 +478,19 @@ function edgesSvg(layout, marker) {
     const trunk = from.x + TRUNK;
     const { x, y } = decision;
     const r = DECISION.radius;
-    draw([[trunk, from.y + size.height], [trunk, y], [x - r, y]], decision.main, false);
+    draw([[trunk, from.y + tall(decision.from)], [trunk, y], [x - r, y]], decision.main, false);
     for (const branch of decision.branches) {
       const { pair } = branch;
       if (branch.kind === 'state') {
         const to = positions.get(pair.to);
         draw([[x, y + r], [x, middle(pair.to)], [to.x - 7, middle(pair.to)]], pair.main);
-        labels.push(labelSvg([branch.answer], x + 12, middle(pair.to), 13, tone(branch.answer)));
+        labels.push(labelSvg([branch.answer], x + 12, middle(pair.to), 12, tone(branch.answer)));
       } else if (branch.kind === 'forward') {
         draw([[x, y + r], [x, branch.y], ...onward(pair, decision.lane, branch.y)], pair.main);
         labels.push(labelSvg([branch.answer], x + 12, branch.y, 16, tone(branch.answer)));
       } else {
         const lines = wrap(branch.answer, 16);
-        const end = x + 12 + Math.max(...lines.map((line) => line.length)) * 6.3 + 14;
+        const end = x + 12 + Math.max(...lines.map((line) => line.length)) * TEXT.labelChar + 14;
         draw([[x, y + r], [x, branch.y], [end + 4, branch.y]], pair.main, false);
         labels.push(
           labelSvg([branch.answer], x + 12, branch.y, 16, tone(branch.answer)) +
@@ -468,7 +503,7 @@ function edgesSvg(layout, marker) {
         `<text x="${x}" y="${y + 0.5}" text-anchor="middle" dominant-baseline="central" class="decision-mark">?</text>` +
         decision.lines
           .map((line, index) => {
-            const lineY = y - ((decision.lines.length - 1) * 15) / 2 + index * 15;
+            const lineY = y - ((decision.lines.length - 1) * 18) / 2 + index * 18;
             return `<text x="${x + r + 9}" y="${lineY}" dominant-baseline="central" class="decision-text">${escapeHtml(line)}</text>`;
           })
           .join(''),
@@ -492,6 +527,7 @@ function nodeSvg(node, position, isStart, chips, prefix, hasChildren, size) {
     parts.push(
       `<clipPath id="${clip}"><rect x="${x + 10}" y="${y + 10}" width="${inner}" height="${NODE.thumb}" rx="6"/></clipPath>` +
         `<image href="${image}" x="${x + 10}" y="${y + 10}" width="${inner}" height="${NODE.thumb}" preserveAspectRatio="xMidYMin slice" clip-path="url(#${clip})"/>` +
+        (NODE.cut ? `<rect x="${x + 10}" y="${y + 10 + NODE.thumb - 44}" width="${inner}" height="44" fill="url(#specsheet-fade)" clip-path="url(#${clip})"/>` : '') +
         `<rect x="${x + 10}" y="${y + 10}" width="${inner}" height="${NODE.thumb}" rx="6" class="thumb-frame"/>`,
     );
   } else {
@@ -502,9 +538,9 @@ function nodeSvg(node, position, isStart, chips, prefix, hasChildren, size) {
   }
 
   // The lane names the screen, so the box only names the state.
-  const textY = y + 10 + NODE.thumb + 17;
+  const textY = y + 10 + NODE.thumb + 18;
   const name = node.state ?? node.screen;
-  const room = isStart ? 20 : 26;
+  const room = Math.floor((NODE.width - 24 - (isStart ? 52 : 0)) / TEXT.nameChar);
   parts.push(
     `<text x="${x + 12}" y="${textY}" dominant-baseline="central" class="node-state">${escapeHtml(name.length > room ? `${name.slice(0, room - 1)}…` : name)}</text>`,
   );
@@ -541,13 +577,13 @@ function flowSvg(graph, layout, prefix, marker) {
     .map(
       (band) =>
         `<rect x="${band.x}" y="${band.y}" width="${band.width}" height="${band.height}" rx="14" class="lane"/>` +
-        `<text x="${band.x + LANE.pad}" y="${band.y + LANE.head / 2 + 1}" dominant-baseline="central" class="lane-name">${escapeHtml(band.screen)}</text>`,
+        `<text x="${band.x + LANE.pad}" y="${band.y + LANE.head / 2 + 2}" dominant-baseline="central" class="lane-name">${escapeHtml(band.screen)}</text>`,
     )
     .join('');
   // A state with something below it has a line leaving its bottom edge.
   const hangs = new Set([...layout.tree.map((pair) => pair.from), ...layout.decisions.map((decision) => decision.from)]);
   const nodes = graph.nodes
-    .map((node) => nodeSvg(node, layout.positions.get(node.id), graph.starts.includes(node.id), layout.chips.get(node.id), prefix, hangs.has(node.id), layout.size))
+    .map((node) => nodeSvg(node, layout.positions.get(node.id), graph.starts.includes(node.id), layout.chips.get(node.id), prefix, hangs.has(node.id), layout.sizes.get(node.id)))
     .join('');
   return bands + edgesSvg(layout, marker) + nodes;
 }
@@ -577,34 +613,34 @@ export function renderFlowSvg(model, viewportName = model.meta.viewports[0]?.nam
 
   const style = `
     .bg { fill: #ffffff; }
-    .title { font: 600 18px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1d1c2b; }
-    .subtitle { font: 400 13px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #5f5e6e; }
+    .title { font: 600 20px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1d1c2b; }
+    .subtitle { font: 400 14px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #5f5e6e; }
     .flow-name { font: 600 15px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1d1c2b; }
     .lane { fill: #f7f6fb; stroke: #e6e5ef; }
-    .lane-name { font: 600 13px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #3d3c4d; }
+    .lane-name { font: 600 16px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #3d3c4d; }
     .node { fill: #ffffff; stroke: #b9b8c6; stroke-width: 1.5; }
     .node-missing { fill: #fbfbfd; stroke: #8a8998; stroke-dasharray: 6 5; }
     .thumb-frame { fill: none; stroke: #dcdbe6; }
     .thumb-empty { fill: #f3f2f8; stroke: #dcdbe6; stroke-dasharray: 4 4; }
-    .thumb-text { font: 400 12px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #5f5e6e; }
-    .node-state { font: 600 15px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1d1c2b; }
+    .thumb-text { font: 400 13px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #5f5e6e; }
+    .node-state { font: 600 16px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1d1c2b; }
     .start-pill { fill: #eeedfe; }
-    .start-text { font: 600 11px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #3c3489; }
+    .start-text { font: 600 12px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #3c3489; }
     .edge { fill: none; stroke: #8f89d6; stroke-width: 1.5; }
     .edge-main { stroke: #4a3fb8; stroke-width: 3; }
     .edge-label-box { fill: #ffffff; stroke: #cecbf6; }
-    .edge-label { font: 400 12px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #26215c; }
+    .edge-label { font: 400 14px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #26215c; }
     .decision { fill: #fff8e6; stroke: #b98a1e; stroke-width: 1.5; }
     .decision-main { stroke-width: 2.5; }
-    .decision-mark { font: 700 13px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #7a4708; }
-    .decision-text { font: 600 13px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1d1c2b; }
+    .decision-mark { font: 700 14px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #7a4708; }
+    .decision-text { font: 600 15px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #1d1c2b; }
     .answer-yes { fill: #e9f6e2; stroke: #5a9a3c; }
     .answer-no { fill: #fdecec; stroke: #c96a6a; }
     .answer-text-yes { fill: #24520d; font-weight: 600; }
     .answer-text-no { fill: #8f2020; font-weight: 600; }
     .edge-label-auto { font-style: italic; fill: #5f5e6e; }
-    .chip { font: 400 12px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #5f5e6e; }
-    .legend { font: 400 12px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #5f5e6e; }
+    .chip { font: 400 13px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #5f5e6e; }
+    .legend { font: 400 13px system-ui, -apple-system, 'Segoe UI', sans-serif; fill: #5f5e6e; }
   `;
 
   let y = 0;
@@ -633,7 +669,7 @@ export function renderFlowSvg(model, viewportName = model.meta.viewports[0]?.nam
   const legend = legendItems
     .map(([mark, text, offset]) => {
       const item = `<g transform="translate(${legendX} ${legendY})">${mark}<text x="${offset}" y="0" dominant-baseline="central" class="legend">${text}</text></g>`;
-      legendX += offset + text.length * 6.2 + 26;
+      legendX += offset + text.length * 6.7 + 26;
       return item;
     })
     .join('');
@@ -645,7 +681,8 @@ export function renderFlowSvg(model, viewportName = model.meta.viewports[0]?.nam
     `<title>User flow: ${escapeHtml(model.meta.title)}</title>` +
     // Scoped to this drawing, so the rules cannot leak into a page it is placed in.
     `<style>${style.replace(/^(\s*)\./gm, '$1.specsheet-flow .')}</style>` +
-    `<defs><marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9 z" fill="#4a3fb8"/></marker></defs>` +
+    `<defs><linearGradient id="specsheet-fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#fff"/></linearGradient>` +
+    `<marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9 z" fill="#4a3fb8"/></marker></defs>` +
     `<rect class="bg" width="${width}" height="${height}"/>` +
     `<text x="${PAD}" y="${PAD + 10}" dominant-baseline="central" class="title">User flow: ${escapeHtml(model.meta.title)}</text>` +
     `<text x="${PAD}" y="${PAD + 34}" dominant-baseline="central" class="subtitle">${escapeHtml(subtitle)}</text>` +
