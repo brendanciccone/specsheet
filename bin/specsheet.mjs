@@ -129,6 +129,7 @@ function init(target, flags) {
       {
         requirements: [{ id: 'R1', text: 'Describe the first requirement.', source: 'stated' }],
         openQuestions: [],
+        assumed: [],
       },
       null,
       2,

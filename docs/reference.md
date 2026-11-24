@@ -33,7 +33,7 @@ Claude runs these for you.
 | `specsheet doctor [folder]` | Says whether this computer has what a run needs: a browser that starts, video recording, and `ffmpeg` for the single walkthrough video |
 | `specsheet version` | Prints the version |
 | `specsheet init <folder>` | Creates a handoff folder with starter files |
-| `specsheet check <folder>` | Counts what the handoff contains and warns if it is very large. Never blocks |
+| `specsheet check <folder>` | Counts what the handoff contains. Above 12 scenarios, 8 screens or 8 requirements it recommends splitting the story and says where. Never blocks |
 | `specsheet run <folder> [--fast]` | Runs every scenario, then builds the handoff files. `--fast` skips the pauses and captions, for use while fixing findings |
 | `specsheet build <folder>` | Rebuilds the handoff files from the last run, without running anything again |
 
@@ -85,8 +85,8 @@ Everything lands in `out/` inside the handoff folder.
 
 | File | What it is |
 |---|---|
-| `handoff.html` | The full handoff as one page, with a copy button on every section. The user flow can be zoomed and dragged, and any screenshot opens full size. The screenshots and videos are inside the file, so it can be sent on its own. Each screenshot appears once: a later step on the same screen links back to it |
-| `flow.png` | The user flow: screens and states as boxes, actions as arrows |
+| `handoff.html` | The full handoff as one page, with a list of contents and a copy button on every section. With more than six scenarios, the passing ones start folded to one line each. The user flow can be zoomed and dragged, and any screenshot opens full size. The screenshots and videos are inside the file, so it can be sent on its own. Each screenshot appears once: a later step on the same screen links back to it |
+| `flow.png` | The user flow. One column per screen, with its states as boxes: the state you arrive on at the top, and the states it can turn into branching below. Arrows are actions, and the heavy line is the main path. Actions that go back are written under the state they start from, not drawn. Each flow gets its own drawing |
 | `screens/` | One full-page screenshot per screen, state and screen size |
 | `videos/` | One captioned walkthrough video per flow, every scenario in order |
 | `features/` | One Gherkin feature file per flow, for QA to import. Steps that every scenario opens with are written once, as a `Background` |

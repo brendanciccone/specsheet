@@ -81,7 +81,7 @@ function buildScenario(raw, staticScenario) {
   };
 }
 
-export function buildModel({ results, config, requirements, openQuestions, staticFlows = [] }) {
+export function buildModel({ results, config, requirements, openQuestions, assumed = [], staticFlows = [] }) {
   const staticByKey = new Map();
   for (const flow of staticFlows) {
     for (const scenario of flow.scenarios) staticByKey.set(`${flow.name}::${scenario.title}`, scenario);
@@ -231,6 +231,7 @@ export function buildModel({ results, config, requirements, openQuestions, stati
     },
     requirements: requirementRows,
     openQuestions,
+    assumed,
     flows,
     findings,
     errors: results.errors ?? [],

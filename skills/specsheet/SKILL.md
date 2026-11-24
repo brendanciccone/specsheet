@@ -19,20 +19,25 @@ handoff files. No model is involved in a run.
    earlier ticket. A wrong assumption wastes a whole run.
 3. **Never present an inferred requirement as if the ticket said it.** Label every
    requirement `stated` or `inferred`.
-4. **The size check warns and never blocks.** Show the warning and ask whether to
-   continue or split the story. The user decides.
+4. **Lean towards splitting a large story, and never block.** When the size check
+   warns, recommend a split and say where you would cut it. The user decides, and
+   "continue as one" is a fine answer.
 5. **Never write to Jira without showing a preview and getting a yes, every time.**
    There is no "don't ask again".
 6. **Never weaken a scenario to make it pass.** A failing step means the prototype and
    the scenario disagree. That is a finding for the designer, not a bug to hide.
 7. **Do not make design decisions.** When a state, a message or a behaviour is missing,
    ask the designer. If they have no answer yet, record an open question.
-8. **Add files; do not change the product's own code.** In a project that holds real
+8. **Leave out what everyone already expects.** A handoff says what this design does,
+   not how browsers and dialogs work. Standard behaviour goes in one "assumed" list, not
+   in scenarios. See "What earns a scenario" in
+   [reference/scenario-format.md](reference/scenario-format.md).
+9. **Add files; do not change the product's own code.** In a project that holds real
    product code, the handoff folder and any prototype you build are new files, on their
    own branch. Never edit, move or delete a file that was there before without the
    user's yes for that file, and never commit or push unless asked. See "Where the
    prototype goes" in [reference/starting-points.md](reference/starting-points.md).
-9. **Never handle a password.** Do not write a password, token or cookie into a scenario
+10. **Never handle a password.** Do not write a password, token or cookie into a scenario
    file, the config or the conversation, and do not ask the user to paste one. See
    "Screens behind a sign-in" in [reference/scenario-format.md](reference/scenario-format.md).
 
@@ -41,7 +46,7 @@ handoff files. No model is involved in a run.
 The skill is the only thing the user installs. You set up the rest, in the project that
 holds the design, before step 1.
 
-This skill needs Specsheet 0.2.0 or later.
+This skill needs Specsheet 0.3.0 or later.
 
 1. Run `npx --no specsheet version`. Write it exactly so: `npx` keeps `--version` for
    itself and prints its own.
@@ -54,7 +59,7 @@ This skill needs Specsheet 0.2.0 or later.
 2. Check `node --version` is 22 or later. If it is not, tell the user to install a newer
    Node from nodejs.org, and stop.
 3. If the project is a git repository and you are on its main branch, ask to create a
-   branch for the handoff first, for example `handoff/<ticket-key>` (rule 8).
+   branch for the handoff first, for example `handoff/<ticket-key>` (rule 9).
 4. Ask once: "Specsheet needs its program in this project and a browser to run the
    scenarios in. I'll run these two commands. The first adds a dev dependency to
    package.json and the lockfile. OK?" and show them:
@@ -136,7 +141,24 @@ R3  If sending fails, the visitor keeps their message.              inferred fro
 Open question: no loading state is designed for sending. Is one needed?
 ```
 
-Wait for the user to approve or edit it, then write `requirements.json`.
+Keep the list to what this ticket and this design ask for. Behaviour that every product
+already has, such as a dialog closing on Escape or the Back button going back, is not a
+requirement. Show it under the list as one line, so the user can object:
+
+```
+Assumed, not tested: dialogs close on Escape and on a click outside; Back returns to the previous step.
+```
+
+**More than 8 requirements is the sign of a story that is too big.** This is the cheapest
+moment to split, so say so now, before anything is built, and propose the cut: group the
+requirements by the screen or the goal they belong to, name each group as its own story,
+and recommend handing off one group at a time. For example: "These 14 fall into three
+stories: cart and promo codes (R1 to R5), shipping (R6 to R9), payment (R10 to R14). I'd
+hand off the cart first. Split that way, or continue as one?" Carry on as one if the user
+prefers.
+
+Wait for the user to approve or edit it, then write `requirements.json`, with the assumed
+lines in its `assumed` list.
 
 ### 4. Early size check
 
@@ -146,8 +168,9 @@ Count the screens in the design, then run:
 npx specsheet check handoff/<TICKET-KEY> --screens <number>
 ```
 
-If it prints a `WARNING`, show it to the user and ask whether to continue or split the
-story first. This is the cheapest moment to stop, because nothing has been built yet.
+If it prints a `WARNING`, show it to the user and recommend a split, with the cut you
+would make (see step 3). Nothing has been built yet, so splitting now costs nothing. If
+the user wants to continue as one, do.
 
 ### 5. Make sure there is a prototype that runs in a browser
 
@@ -157,7 +180,7 @@ step. Follow [reference/starting-points.md](reference/starting-points.md).
 
 Before you write any prototype code, read "Where the prototype goes" in that file: in a
 product's codebase the prototype is new files on a branch, and existing code stays as it
-is (rule 8).
+is (rule 9).
 
 When you built or changed the prototype, list the files you added and ask the user to
 review it before you go on. From here on, the prototype is what gets tested.
@@ -178,7 +201,11 @@ instead of repeating it in every scenario.
 npx specsheet check handoff/<TICKET-KEY>
 ```
 
-Show any `WARNING` to the user and ask whether to continue.
+It warns above 12 scenarios or 8 screens, and its notes say which flows and which
+requirements hold the most scenarios. On a `WARNING`, first look for scenarios that should
+not be there: standard behaviour (rule 8), and two scenarios that prove the same thing.
+Then show the warning and recommend a split along the lines its notes give. A separate
+story is a separate handoff folder. If the user wants to continue as one, do.
 
 ### 8. Run, and handle the findings
 
@@ -193,7 +220,7 @@ the user:
 |---|---|---|
 | Failed step | The prototype does not do what the scenario says | Work out with the user which one is wrong. Fix that one. Never loosen a check to pass |
 | Unverified "Then" step | The step has no check, so nothing was proven | Add a check for what the step claims |
-| State never reached | A state was declared and no step lands on it | Ask the user: design it, mark it not applicable with a reason, or leave it flagged and add an open question |
+| State never reached | A state was declared and no step lands on it | Ask the user: design it, mark it not applicable with a reason, or leave it flagged and add an open question. If you declared it only for completeness and neither the ticket nor the design calls for it, take it out of `states` |
 | Requirement not proven | No passing scenario covers it | Add a scenario, or ask the user whether it is out of scope |
 
 Run again until the only findings left are ones the user chose to leave flagged.

@@ -128,11 +128,11 @@ test('feature file has tags, scenarios and steps', () => {
 });
 
 test('user flow: one node per screen and state, one arrow per action', () => {
-  const graph = buildGraph(model());
+  const graph = buildGraph(model().flows[0], 'Desktop');
   assert.deepEqual(graph.starts, ['checkout/payment/ready', 'checkout/done/loaded']);
   assert.deepEqual(
-    graph.edges.map((edge) => [edge.from, edge.to, edge.label]),
-    [['checkout/payment/ready', 'checkout/done/loaded', 'I pay with a valid card']],
+    graph.edges.map((edge) => [edge.from, edge.to, edge.label, edge.main]),
+    [['checkout/payment/ready', 'checkout/done/loaded', 'I pay with a valid card', true]],
   );
   const missing = graph.nodes.filter((node) => node.missing).map((node) => node.id);
   assert.deepEqual(missing.sort(), ['checkout/payment/declined', 'checkout/payment/submitting']);
@@ -142,6 +142,99 @@ test('user flow: one node per screen and state, one arrow per action', () => {
   const svg = renderFlowSvg(model());
   assert.match(svg, /^<svg /);
   assert.match(svg, /I pay with a valid card/);
+});
+
+// A flow with branches inside a screen, a way back, and a change nobody asked for.
+function branching() {
+  const run = (title, steps) => scenario(title, [], steps.map(([text, screen, state]) => step(text, screen, state)));
+  const cart = ['Given I have items in my cart', 'cart', 'ready'];
+  const toPay = ['When I check out', 'pay', 'ready'];
+  const raw = {
+    finishedAt: '2026-11-15T12:00:00.000Z',
+    errors: [],
+    scenarios: [
+      run('Order is placed', [cart, toPay, ['When I pay with a valid card', 'pay', 'sending'], ['Then I see my order number', 'done', 'ready']]),
+      run('Card is declined', [cart, toPay, ['When I pay with a bad card', 'pay', 'declined'], ['When I try again', 'pay', 'ready']]),
+      run('Back to the cart', [cart, toPay, ['When I go back', 'cart', 'ready']]),
+      run('Promo code', [cart, ['When I apply a code', 'cart', 'promo'], ['When I skip to the end', 'done', 'ready']]),
+    ].map((item) => ({ ...item, declaredStates: {} })),
+  };
+  return buildModel({ results: raw, config, requirements: [], openQuestions: [] }).flows[0];
+}
+
+test('user flow: a change with no new action is labelled as automatic, not with the last action', () => {
+  const graph = buildGraph(branching(), 'Desktop');
+  const labels = Object.fromEntries(graph.edges.map((edge) => [`${edge.from} > ${edge.to}`, edge.label]));
+  assert.equal(labels['pay/ready > pay/sending'], 'I pay with a valid card');
+  assert.equal(labels['pay/sending > done/ready'], 'Automatically');
+});
+
+test('user flow: the main path is the scenario that goes through the most screens', () => {
+  const graph = buildGraph(branching(), 'Desktop');
+  assert.deepEqual(graph.mainPath, ['cart/ready', 'pay/ready', 'pay/sending', 'done/ready']);
+  assert.deepEqual(graph.edges.filter((edge) => edge.main).map((edge) => edge.label), ['I check out', 'I pay with a valid card', 'Automatically']);
+});
+
+test('user flow: one lane per screen, states branch below, and nothing is drawn backwards', () => {
+  const graph = buildGraph(branching(), 'Desktop');
+  const layout = layoutGraph(graph);
+  assert.deepEqual(layout.bands.map((band) => band.screen), ['cart', 'pay', 'done']);
+
+  const at = (id) => layout.positions.get(id);
+  // States of one screen share a lane. A state reached from another sits below it, indented.
+  assert.equal(at('pay/sending').lane, at('pay/ready').lane);
+  assert.ok(at('pay/sending').x > at('pay/ready').x && at('pay/sending').y > at('pay/ready').y);
+  assert.ok(at('pay/declined').y > at('pay/sending').y, 'the main path comes first');
+  assert.deepEqual(layout.tree.map((pair) => `${pair.from} > ${pair.to}`).sort(), ['cart/ready > cart/promo', 'pay/ready > pay/declined', 'pay/ready > pay/sending']);
+
+  // Arrows between lanes only go forward. One that passes over a screen is routed above it.
+  for (const pair of layout.forward) assert.ok(at(pair.to).lane > at(pair.from).lane);
+  assert.deepEqual(layout.skips.map((pair) => `${pair.from} > ${pair.to}`), ['cart/promo > done/ready']);
+
+  // Going back is text under the state it starts from.
+  assert.deepEqual(layout.chips.get('pay/declined'), [['↩ I try again → ready']]);
+  assert.deepEqual(layout.chips.get('pay/ready'), [['↩ I go back → cart · ready']]);
+  const svg = renderFlowSvg({ meta: { title: 'T', viewports: [viewport] }, flows: [branching()] });
+  assert.match(svg, /I go back → cart · ready/);
+});
+
+test('user flow: each flow gets its own drawing', () => {
+  const first = branching();
+  const second = { ...branching(), name: 'Returns' };
+  const svg = renderFlowSvg({ meta: { title: 'T', viewports: [viewport] }, flows: [first, second] });
+  assert.match(svg, /class="flow-name">Checkout</);
+  assert.match(svg, /class="flow-name">Returns</);
+  const ids = svg.match(/clipPath id="[^"]+"/g) ?? [];
+  assert.equal(new Set(ids).size, ids.length);
+});
+
+test('the page folds passing scenarios once there are many, and lists them in the contents', async () => {
+  const { FOLD_ABOVE, renderPage } = await import('../src/build/page.js');
+  const few = renderPage(model(), { flowImage: null });
+  assert.equal((few.match(/<details open>/g) ?? []).length, 3, 'a short page shows every scenario');
+  assert.match(few, /<nav class="toc no-copy"/);
+  assert.match(few, /<a href="#flow-0-scenario-1"><span class="mark bad"/);
+  assert.match(few, /<td><a href="#flow-0-scenario-0">Payment succeeds<\/a>/);
+
+  const raw = results();
+  for (let index = 0; index < FOLD_ABOVE; index += 1) {
+    raw.scenarios.push(scenario(`Extra ${index}`, [], [step('Given I am on the payment step', 'checkout/payment', 'ready')]));
+  }
+  const many = renderPage(buildModel({ results: raw, config, requirements, openQuestions: [], staticFlows }), { flowImage: null });
+  assert.equal((many.match(/<article class="scenario"/g) ?? []).length, 3 + FOLD_ABOVE);
+  assert.equal((many.match(/<details open>/g) ?? []).length, 1, 'only the failing scenario is open');
+  assert.match(many, /<details class="fold">/);
+});
+
+test('assumed standard behaviour is listed once, and only when there is some', async () => {
+  const { renderPage } = await import('../src/build/page.js');
+  const without = model();
+  assert.doesNotMatch(commentSections(without, []).join('\n'), /Assumed standard behaviour/);
+  assert.doesNotMatch(renderPage(without, { flowImage: null }), /id="assumed"/);
+
+  const built = buildModel({ results: results(), config, requirements, openQuestions: [], assumed: ['Dialogs close on Escape.'], staticFlows });
+  assert.match(commentSections(built, []).join('\n'), /### Assumed standard behaviour\n\n[^\n]+\n\n- Dialogs close on Escape\./);
+  assert.match(renderPage(built, { flowImage: null }), /<section id="assumed"[\s\S]*<li>Dialogs close on Escape\.<\/li>/);
 });
 
 test('the comment says which source is the truth when a design was rebuilt', () => {

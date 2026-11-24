@@ -44,10 +44,12 @@ flow(
 
 **`flow(name, options, body)`** groups the scenarios for one user flow.
 
-- `states` lists every state each screen should have, including ones the design does not
-  show yet. Decide this from the code: a screen that loads data needs loading, empty and
-  error states; a form needs invalid, submitting, success and failure states; a list
-  needs none, one and many.
+- `states` lists the states each screen needs for this story, including ones the design
+  does not show yet. List a state when the ticket asks for it, the design draws it, or a
+  user would be stuck without it: a screen that loads data needs to say when it is
+  loading, empty or failed, and a form needs to say when the input is wrong and when
+  sending fails. Do not list a state only because a checklist of states has it. Every
+  state here becomes a box in the user flow and, if nothing shows it, a finding.
 - `notApplicable` maps `"screen/state"` to the reason a state does not apply. Use it only
   when the user agrees.
 
@@ -91,6 +93,40 @@ the handoff is built from it.
    with `ready`, `submitting`, `card-declined`. Use the same name every time the same
    screen and state appears, in every scenario.
 10. **Do not take screenshots or record anything yourself.** The program does both.
+
+## What earns a scenario
+
+A scenario is worth writing when a developer or a tester would otherwise have to guess.
+Write one for:
+
+- anything the ticket asks for;
+- anything this design decides: its own wording, validation, order of steps, what is
+  kept and what is lost;
+- a failure the user has to recover from;
+- standard behaviour this design changes, such as a dialog that must *not* close on a
+  click outside it.
+
+Do not write one for behaviour the platform or the product already gives, when the
+design leaves it as it is:
+
+- a dialog, menu or popover closing on Escape, on a click outside, or on its close button;
+- the browser's Back button, links opening, the page scrolling;
+- focus moving into a dialog and back, Tab order, Enter submitting a form;
+- hover and pressed styles;
+- anything already covered by an earlier story, such as the site header or signing in.
+
+List what you left out in the `assumed` list of `requirements.json`, one plain sentence
+each: "Dialogs close on Escape and on a click outside them." The handoff prints the list
+once, under "Assumed standard behaviour", so QA sees it and it costs one line, not a
+scenario. If you are unsure whether something is standard here, ask the user.
+
+The same goes inside a scenario. A step is a thing the user does or sees that matters to
+this behaviour. "Then the dialog closes" after choosing an option is not a step unless
+the closing is the point.
+
+Aim for the fewest scenarios that prove every requirement: usually one for the main path
+and one for each way it can go differently. Two scenarios that differ only in the data
+typed are one scenario.
 
 ## Screens behind a sign-in
 

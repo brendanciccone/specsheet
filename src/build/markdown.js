@@ -140,6 +140,14 @@ export function questionsMarkdown(model) {
   return model.openQuestions.map((question, index) => `${index + 1}. ${question}`).join('\n');
 }
 
+export const ASSUMED_INTRO =
+  'Behaviour the platform or the product already gives, relied on here and not written as scenarios. ' +
+  'Say so if any of it should work differently in this design.';
+
+export function assumedMarkdown(model) {
+  return `${ASSUMED_INTRO}\n\n${model.assumed.map((line) => `- ${line}`).join('\n')}`;
+}
+
 /** Problems a reader of the ticket should know about. Empty when the run is clean. */
 export function problemLines(model) {
   const lines = [];
@@ -183,6 +191,7 @@ export function commentSections(model, files) {
     sections.push(`### Scenarios: ${flow.name}\n\n${scenariosMarkdown(flow, model)}`);
   }
   sections.push(`### States\n\n${statesMarkdown(model)}`);
+  if (model.assumed?.length) sections.push(`### Assumed standard behaviour\n\n${assumedMarkdown(model)}`);
   sections.push(`### Open questions\n\n${questionsMarkdown(model)}`);
   if (files?.length) sections.push(`### Files\n\n${filesMarkdown(files)}`);
   return sections;

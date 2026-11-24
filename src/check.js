@@ -109,6 +109,28 @@ export function readStaticFlows(dir) {
   return [...merged.values()];
 }
 
+/** Where a large story could be divided: by flow, or by the requirements that take the most scenarios. */
+function splitHints(flows, requirements, limits) {
+  const hints = [];
+  const sized = flows.filter((flow) => flow.scenarios.length);
+  if (sized.length > 1) {
+    const list = sized.map((flow) => `"${flow.name}" (${plural(flow.scenarios.length, 'scenario')})`).join(', ');
+    hints.push(`It could be split by flow: ${list}.`);
+  }
+  const perRequirement = requirements
+    .map((item) => ({ id: item.id, count: sized.flatMap((flow) => flow.scenarios).filter((scenario) => scenario.covers.includes(item.id)).length }))
+    .filter((item) => item.count >= 3)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 3);
+  if (perRequirement.length) {
+    hints.push(`Most scenarios go to: ${perRequirement.map((item) => `${item.id} (${item.count})`).join(', ')}. Each could be a story of its own.`);
+  }
+  if (!sized.length && requirements.length > limits.requirements) {
+    hints.push('Group the requirements by the screen or the goal they belong to, and hand off one group at a time.');
+  }
+  return hints;
+}
+
 /**
  * Count what the handoff contains and decide whether to warn.
  * `screens` is the number of screens Claude counted in the design, for the early check
@@ -157,15 +179,17 @@ export function sizeCheck(dir, { screens: screensHint } = {}) {
 
   const warnings = [];
   const notes = [];
+  const limits = config.warnAt;
   const over = [];
-  if (counts.screens > config.warnAt) over.push(plural(counts.screens, 'screen'));
-  if (counts.scenarios > config.warnAt) over.push(plural(counts.scenarios, 'scenario'));
-  if (early && counts.requirements > config.warnAt) over.push(plural(counts.requirements, 'requirement'));
+  if (counts.scenarios > limits.scenarios) over.push(plural(counts.scenarios, 'scenario'));
+  if (counts.screens > limits.screens) over.push(plural(counts.screens, 'screen'));
+  if (early && counts.requirements > limits.requirements) over.push(plural(counts.requirements, 'requirement'));
   if (over.length) {
     warnings.push(
-      `This story covers ${over.join(' and ')}. That is large for one handoff and will cost more to process. ` +
-        'Continue, or split the story first?',
+      `This story covers ${over.join(' and ')}. A handoff that size is slow to read and its user flow is hard to follow. ` +
+        'Splitting it into smaller stories is recommended. Continue as one, or split?',
     );
+    notes.push(...splitHints(flows, requirements, limits));
   }
   if (commentChars > config.commentLimit) {
     notes.push(
@@ -180,7 +204,7 @@ export function sizeCheck(dir, { screens: screensHint } = {}) {
     notes.push(`${counts.viewports} screen sizes are set, so every scenario runs ${counts.viewports} times.`);
   }
 
-  return { early, counts, commentChars, warnings, notes, threshold: config.warnAt };
+  return { early, counts, commentChars, warnings, notes, limits };
 }
 
 export function formatSizeCheck(result) {
@@ -197,11 +221,13 @@ export function formatSizeCheck(result) {
     lines.push(`  ${plural(counts.screens, 'screen')}, ${plural(counts.states, 'state')}`);
     lines.push(`  Ticket text: about ${result.commentChars.toLocaleString('en-US')} characters`);
   }
+  for (const warning of result.warnings) lines.push(`  WARNING: ${warning}`);
   for (const note of result.notes) lines.push(`  Note: ${note}`);
-  if (result.warnings.length) {
-    for (const warning of result.warnings) lines.push(`  WARNING: ${warning}`);
-  } else {
-    lines.push(`  No warning. The threshold is ${result.threshold} screens or scenarios.`);
+  if (!result.warnings.length) {
+    lines.push(
+      `  No warning. A split is recommended above ${result.limits.scenarios} scenarios, ` +
+        `${result.limits.screens} screens or ${result.limits.requirements} requirements.`,
+    );
   }
   return lines.join('\n');
 }

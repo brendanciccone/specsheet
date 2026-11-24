@@ -2,9 +2,11 @@
 // tables and images, so a selection pastes cleanly into Jira, Confluence, Notion or a doc.
 
 import fs from 'node:fs';
-import { clock, escapeHtml, formatBytes, stripKeyword } from '../util.js';
+import { clock, escapeHtml, formatBytes, plural, stripKeyword } from '../util.js';
 import { gherkinLine, scenarioText, sharedStart, stepLines, uniqueScenarios } from './gherkin.js';
 import {
+  ASSUMED_INTRO,
+  assumedMarkdown,
   checklistLines,
   commentSections,
   filesMarkdown,
@@ -36,6 +38,34 @@ const STYLE = `
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--page); color: var(--ink); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
 main { max-width: 880px; margin: 0 auto; padding: 36px 20px 96px; }
+.toc { max-width: 880px; margin: 0 auto; padding: 20px 20px 0; font-size: 14px; }
+.toc-title { margin: 0 0 6px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.toc ul { margin: 0; padding: 0; list-style: none; }
+.toc > ul { display: flex; flex-wrap: wrap; gap: 2px 14px; }
+.toc li { margin: 0; }
+.toc ul ul { display: none; }
+.toc a { display: block; padding: 3px 8px; color: var(--ink); text-decoration: none; border-radius: 6px; }
+.toc a:hover { background: var(--soft); }
+.toc a.current { background: var(--soft); color: var(--accent); font-weight: 600; }
+.toc ul ul a { display: flex; gap: 6px; padding-left: 10px; color: var(--muted); line-height: 1.35; }
+.toc ul ul a.current { color: var(--accent); }
+.mark { flex: none; width: 14px; text-align: center; font-weight: 700; }
+@media (min-width: 1240px) {
+  body { display: grid; grid-template-columns: 260px minmax(0, 880px); justify-content: center; column-gap: 28px; }
+  main { margin: 0; width: 100%; }
+  .toc { position: sticky; top: 0; align-self: start; max-height: 100vh; overflow-y: auto; margin: 0; padding: 40px 0 40px 16px; }
+  .toc > ul { display: block; }
+  .toc ul ul { display: block; margin: 2px 0 8px; }
+}
+.stats { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 0; padding: 0; list-style: none; }
+.stats li { margin: 0; }
+.stats a { display: block; padding: 8px 14px; color: var(--ink); text-decoration: none; background: var(--soft); border: 1px solid var(--line); border-radius: 10px; }
+.stats a:hover { border-color: var(--muted); }
+.stats strong { display: block; font-size: 20px; line-height: 1.2; }
+.stats span { color: var(--muted); font-size: 13px; }
+.stats .is-bad strong { color: var(--bad); }
+.stats .is-warn strong { color: var(--warn); }
+.stats .is-good strong { color: var(--good); }
 .eyebrow { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--muted); font-size: 14px; }
 .eyebrow svg { width: 20px; height: 20px; flex: none; }
 h1 { margin: 6px 0 0; font-size: 30px; line-height: 1.2; text-wrap: balance; }
@@ -59,8 +89,20 @@ table.facts th { width: 150px; }
 .good { color: var(--good); font-weight: 600; }
 .bad { color: var(--bad); font-weight: 600; }
 .warn { color: var(--warn); font-weight: 600; }
-.scenario { margin-top: 30px; }
-.scenario-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.scenario { margin-top: 12px; border: 1px solid var(--line); border-radius: 10px; scroll-margin-top: 12px; }
+.scenario > details > summary { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 12px 16px; cursor: pointer; list-style: none; border-radius: 10px; }
+.scenario > details > summary::-webkit-details-marker { display: none; }
+.scenario > details > summary::before { content: "▸"; flex: none; color: var(--muted); }
+.scenario > details[open] > summary::before { content: "▾"; }
+.scenario > details > summary:hover { background: var(--soft); }
+.scenario > details > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.scenario > details > summary h3 { flex: 1 1 260px; }
+.scenario-brief { color: var(--muted); font-size: 14px; }
+.scenario-body { padding: 0 16px 6px; }
+.scenario-body .tools { float: right; margin: 0 0 8px 12px; }
+.scenario figure img { max-height: 460px; }
+section, article { scroll-margin-top: 12px; }
+details.fold > summary { cursor: pointer; margin-bottom: 10px; color: var(--accent); }
 .scenario-meta { margin: 4px 0 12px; color: var(--muted); font-size: 14px; }
 video.walkthrough { display: block; width: 100%; max-width: 720px; height: auto; margin: 0 0 16px; border: 1px solid var(--line, #dcdbe6); border-radius: 8px; background: var(--soft); aspect-ratio: 16 / 10; object-fit: cover; object-position: top; }
 video.walkthrough[hidden] { display: none; }
@@ -97,7 +139,7 @@ footer { margin-top: 56px; padding-top: 14px; border-top: 1px solid var(--line);
 .lightbox-tip { margin-right: 10px; opacity: 0.75; }
 .lightbox img { display: block; max-width: min(100%, 1200px); height: auto; margin: 0 auto; border-radius: 8px; background: #fff; cursor: zoom-in; }
 .lightbox.zoomed img { max-width: none; cursor: zoom-out; }
-@media print { .no-copy { display: none !important; } .flow-static img { display: block !important; } }
+@media print { body { display: block; } .no-copy { display: none !important; } .flow-static img { display: block !important; } }
 `;
 
 const VIEW_SCRIPT = `
@@ -107,7 +149,7 @@ const VIEW_SCRIPT = `
   // Until a video is played, show the scenario's first screenshot. The video's own
   // first frame is blank.
   document.querySelectorAll('video.walkthrough').forEach(function (video) {
-    var first = (video.closest('article') || video.closest('section')).querySelector('figure img, .same-shot');
+    var first = (video.closest('article') || video.closest('section')).querySelector('article figure img, article .same-shot');
     if (first && first.classList.contains('same-shot')) {
       first = document.querySelector('figure[data-file="' + CSS.escape(first.dataset.file) + '"] img');
     }
@@ -127,6 +169,58 @@ const VIEW_SCRIPT = `
     var playing = video.play();
     if (playing && playing.catch) playing.catch(function () {});
   });
+
+  // ----- Folded scenarios -----
+  // A link to something inside a folded scenario opens it first.
+  function reveal(target) {
+    for (var node = target; node; node = node.parentElement) {
+      if (node.tagName === 'DETAILS') node.open = true;
+    }
+  }
+  function follow() {
+    var target = location.hash ? document.getElementById(decodeURIComponent(location.hash.slice(1))) : null;
+    if (!target) return;
+    reveal(target);
+    var inner = target.querySelector(':scope > details');
+    if (inner) inner.open = true;
+    target.scrollIntoView();
+  }
+  window.addEventListener('hashchange', follow);
+  follow();
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('button[data-fold]');
+    if (!button) return;
+    var open = button.dataset.fold === 'open';
+    button.closest('section').querySelectorAll('article.scenario > details').forEach(function (fold) { fold.open = open; });
+  });
+  window.addEventListener('beforeprint', function () {
+    document.querySelectorAll('details').forEach(function (fold) { fold.open = true; });
+  });
+
+  // ----- Contents: mark the part of the page being read -----
+  var links = {};
+  document.querySelectorAll('.toc a').forEach(function (link) { links[link.getAttribute('href').slice(1)] = link; });
+  var marked = [];
+  function mark() {
+    var line = window.innerHeight * 0.3;
+    var current = [];
+    document.querySelectorAll('main section[id], main article[id]').forEach(function (part) {
+      var box = part.getBoundingClientRect();
+      if (box.top <= line && box.bottom > line && links[part.id]) current.push(links[part.id]);
+    });
+    marked.forEach(function (link) { link.classList.remove('current'); });
+    current.forEach(function (link) { link.classList.add('current'); });
+    marked = current;
+  }
+  var waiting = false;
+  window.addEventListener('scroll', function () {
+    if (waiting) return;
+    waiting = true;
+    requestAnimationFrame(function () { waiting = false; mark(); });
+  }, { passive: true });
+  // Opening or folding a scenario moves the page without scrolling it.
+  document.addEventListener('toggle', mark, true);
+  mark();
 
   // ----- Full-size screenshots -----
   var box = document.querySelector('.lightbox');
@@ -273,6 +367,14 @@ const SCRIPT = `
 
   function prepare(target, withImages) {
     var clone = target.cloneNode(true);
+    // A folded scenario is copied whole, as plain headings and paragraphs.
+    clone.querySelectorAll('summary').forEach(function (summary) {
+      summary.querySelectorAll('.scenario-brief').forEach(function (brief) { brief.remove(); });
+      summary.replaceWith.apply(summary, Array.prototype.slice.call(summary.childNodes));
+    });
+    clone.querySelectorAll('details').forEach(function (fold) {
+      fold.replaceWith.apply(fold, Array.prototype.slice.call(fold.childNodes));
+    });
     clone.querySelectorAll('.same-shot').forEach(function (reference) {
       var selector = 'figure[data-file="' + CSS.escape(reference.dataset.file) + '"]';
       if (clone.querySelector(selector)) {
@@ -460,7 +562,7 @@ function flowVideosHtml(flow, flowKey) {
     .join('');
 }
 
-function scenarioHtml(scenario, key, manyViewports, flowKey, shown) {
+function scenarioHtml(scenario, key, manyViewports, flowKey, shown, open) {
   const meta = [];
   if (scenario.covers.length) meta.push(`Proves ${scenario.covers.join(', ')}`);
   meta.push(scenario.status === 'passed' ? 'Passes' : 'Fails');
@@ -500,16 +602,30 @@ function scenarioHtml(scenario, key, manyViewports, flowKey, shown) {
       ? `<p class="bad">This scenario could not start.</p>${scenario.error ? `<pre class="error">${escapeHtml(scenario.error)}</pre>` : ''}`
       : '';
 
+  const passed = scenario.status === 'passed';
+  const brief = [
+    scenario.covers.join(', '),
+    plural(scenario.steps.length, 'step'),
+    `<span class="${passed ? 'good' : 'bad'}">${passed ? 'Passes' : 'Fails'}</span>`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  // Folded to one line each when there are many, so the list can be read at a glance.
   return (
-    `<article class="scenario" data-block="${key}">` +
-    `<div class="scenario-head"><h3>Scenario: ${escapeHtml(title)}</h3>${tools({ images: true })}</div>` +
+    `<article class="scenario" id="${key}" data-block="${key}"><details${open ? ' open' : ''}>` +
+    `<summary><h3>Scenario: ${escapeHtml(title)}</h3><span class="scenario-brief no-copy">${brief}</span></summary>` +
+    `<div class="scenario-body">${tools({ images: true })}` +
     `<p class="scenario-meta">${metaHtml}${video}</p>` +
     player +
     empty +
     body +
-    '</article>'
+    '</div></details></article>'
   );
 }
+
+/** Scenarios are shown open while the page is short. Past this many, only failing ones are. */
+export const FOLD_ABOVE = 6;
 
 export function renderPage(model, { flowImage, flowSvg = null, files = [], icon = '' } = {}) {
   embeddedVideoBytes = 0;
@@ -517,6 +633,15 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
   const manyViewports = meta.viewports.length > 1;
   const markdown = {};
   const parts = [];
+  const toc = [];
+  const total = model.flows.reduce((sum, flow) => sum + flow.scenarios.length, 0);
+  const fold = total > FOLD_ABOVE;
+  const scenarioIds = new Map();
+  model.flows.forEach((flow, flowIndex) => {
+    flow.scenarios.forEach((scenario, index) => {
+      if (!scenarioIds.has(scenario.title)) scenarioIds.set(scenario.title, `flow-${flowIndex}-scenario-${index}`);
+    });
+  });
 
   // Summary
   const facts = summaryFacts(model)
@@ -529,7 +654,7 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
   const problems = problemLines(model);
   markdown.summary = `## Summary\n\n${summaryMarkdown(model)}`;
   parts.push(
-    `<section data-block="summary">${head('Summary')}` +
+    `<section id="summary" data-block="summary">${head('Summary')}` +
       `<div class="table-wrap"><table class="facts"><tbody>${facts}</tbody></table></div>` +
       (note ? `<p class="note" style="margin-top:12px">${escapeHtml(note)}</p>` : '') +
       (problems.length
@@ -545,12 +670,12 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
       (item) =>
         `<tr><td>${escapeHtml(item.id)}</td><td>${escapeHtml(item.text)}</td><td>${escapeHtml(requirementSource(item.source))}</td>` +
         `<td class="${statusClass(item.status)}">${escapeHtml(requirementStatus(item.status))}</td>` +
-        `<td>${escapeHtml(item.scenarios.join('; ') || 'None')}</td></tr>`,
+        `<td>${item.scenarios.map((title) => `<a href="#${scenarioIds.get(title)}">${escapeHtml(title)}</a>`).join('; ') || 'None'}</td></tr>`,
     )
     .join('');
   markdown.requirements = `## Requirements\n\n${requirementsMarkdown(model)}`;
   parts.push(
-    `<section data-block="requirements">${head('Requirements')}` +
+    `<section id="requirements" data-block="requirements">${head('Requirements')}` +
       (model.requirements.length
         ? '<div class="table-wrap"><table><thead><tr><th>ID</th><th>Requirement</th><th>From</th><th>Status</th><th>Proved by</th></tr></thead>' +
           `<tbody>${requirementRows}</tbody></table></div>`
@@ -562,8 +687,9 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
   if (flowImage) {
     markdown.flow = '## User flow\n\nSee the attached image: flow.png';
     parts.push(
-      `<section data-block="flow">${head('User flow', { images: true })}` +
-        '<p>Screens and states as boxes, and the actions between them as arrows. Every arrow is an action the run performed.</p>' +
+      `<section id="flow" data-block="flow">${head('User flow', { images: true })}` +
+        '<p>One column per screen, with its states as boxes. Arrows are the actions the run performed: the heavy line is the main path, ' +
+        'and the states a screen can turn into branch off below it. Actions that go back are listed under the state they start from.</p>' +
         // The interactive drawing. The picture below it is what gets copied and printed.
         (flowSvg
           ? '<div class="flow-viewer no-copy"><div class="flow-tools">' +
@@ -588,10 +714,27 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
       .map((scenario, index) => {
         const scenarioKey = `${key}-scenario-${index}`;
         markdown[scenarioKey] = '```gherkin\n' + scenarioText(scenario, '') + '\n```';
-        return scenarioHtml(scenario, scenarioKey, manyViewports, key, shown);
+        return scenarioHtml(scenario, scenarioKey, manyViewports, key, shown, !fold || scenario.status !== 'passed');
       })
       .join('');
-    parts.push(`<section data-block="${key}">${head(`Scenarios: ${flow.name}`, { images: true })}${flowVideosHtml(flow, key)}${scenarios}</section>`);
+    const failed = flow.scenarios.filter((scenario) => scenario.status !== 'passed').length;
+    const count =
+      `<p class="scenario-meta no-copy">${plural(flow.scenarios.length, 'scenario')}, ` +
+      `${failed ? `<span class="bad">${failed} failing</span>` : 'all passing'}.` +
+      `${fold ? ' Passing ones are folded: click one to see its steps and screenshots.' : ''} ` +
+      '<button type="button" data-fold="open">Open all</button> <button type="button" data-fold="close">Fold all</button></p>';
+    toc.push({
+      id: key,
+      label: `Scenarios: ${flow.name}`,
+      items: flow.scenarios.map((scenario, index) => ({
+        id: `${key}-scenario-${index}`,
+        label: manyViewports ? `${scenario.title} (${scenario.viewport.name})` : scenario.title,
+        passed: scenario.status === 'passed',
+      })),
+    });
+    parts.push(
+      `<section id="${key}" data-block="${key}">${head(`Scenarios: ${flow.name}`, { images: true })}${flowVideosHtml(flow, key)}${count}${scenarios}</section>`,
+    );
   });
 
   // Checklist
@@ -613,7 +756,13 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
       return `${start}<ul>${items}</ul>`;
     })
     .join('');
-  parts.push(`<section data-block="checklist">${head('Acceptance checklist')}${checklist}</section>`);
+  // The checklist says the scenarios again as a list, so on a long page it starts folded
+  // unless it is the format this handoff was set up to use.
+  const checklistBody =
+    fold && meta.format !== 'checklist'
+      ? `<details class="fold"><summary class="no-copy">Show the checklist: the same ${plural(total, 'scenario')} as a list to tick off</summary>${checklist}</details>`
+      : checklist;
+  parts.push(`<section id="checklist" data-block="checklist">${head('Acceptance checklist')}${checklistBody}</section>`);
 
   // States
   const stateRows = model.flows
@@ -628,7 +777,7 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
     .join('');
   markdown.states = `## States\n\n${statesMarkdown(model)}`;
   parts.push(
-    `<section data-block="states">${head('States')}` +
+    `<section id="states" data-block="states">${head('States')}` +
       '<p>The states each screen needs, and whether a scenario shows them. "Not shown" means no step lands on that state: ' +
       'either it has not been designed yet, or no scenario covers it.</p>' +
       (stateRows
@@ -637,10 +786,20 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
       '</section>',
   );
 
+  // Standard behaviour that was relied on, not tested
+  if (model.assumed?.length) {
+    markdown.assumed = `## Assumed standard behaviour\n\n${assumedMarkdown(model)}`;
+    parts.push(
+      `<section id="assumed" data-block="assumed">${head('Assumed standard behaviour')}` +
+        `<p>${escapeHtml(ASSUMED_INTRO)}</p>` +
+        `<ul>${model.assumed.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul></section>`,
+    );
+  }
+
   // Open questions
   markdown.questions = `## Open questions\n\n${questionsMarkdown(model)}`;
   parts.push(
-    `<section data-block="questions">${head('Open questions')}` +
+    `<section id="questions" data-block="questions">${head('Open questions')}` +
       (model.openQuestions.length
         ? `<ol>${model.openQuestions.map((question) => `<li>${escapeHtml(question)}</li>`).join('')}</ol>`
         : '<p>None.</p>') +
@@ -651,7 +810,7 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
   if (files.length) {
     markdown.files = `## Files\n\n${filesMarkdown(files)}`;
     parts.push(
-      `<section data-block="files">${head('Files')}` +
+      `<section id="files" data-block="files">${head('Files')}` +
         '<p>These sit in the same folder as this page.</p>' +
         `<ul>${files
           .map(
@@ -667,14 +826,58 @@ export function renderPage(model, { flowImage, flowSvg = null, files = [], icon 
   const blob = JSON.stringify(markdown).replaceAll('<', '\\u003c');
   const eyebrow = ['Design handoff', meta.ticket?.key].filter(Boolean).join(' · ');
 
+  // The contents, beside the page on a wide screen and above it on a narrow one.
+  const entries = [
+    { id: 'summary', label: 'Summary' },
+    { id: 'requirements', label: 'Requirements' },
+    flowImage ? { id: 'flow', label: 'User flow' } : null,
+    ...toc,
+    { id: 'checklist', label: 'Acceptance checklist' },
+    { id: 'states', label: 'States' },
+    model.assumed?.length ? { id: 'assumed', label: 'Assumed standard behaviour' } : null,
+    { id: 'questions', label: `Open questions${model.openQuestions.length ? ` (${model.openQuestions.length})` : ''}` },
+    files.length ? { id: 'files', label: 'Files' } : null,
+  ].filter(Boolean);
+  const nav =
+    '<nav class="toc no-copy" aria-label="Contents"><p class="toc-title">Contents</p><ul>' +
+    entries
+      .map((entry) => {
+        const items = (entry.items ?? [])
+          .map(
+            (item) =>
+              `<li><a href="#${item.id}"><span class="mark ${item.passed ? 'good' : 'bad'}" aria-hidden="true">${item.passed ? '✓' : '✕'}</span>` +
+              `<span>${escapeHtml(item.label)}${item.passed ? '' : ' (fails)'}</span></a></li>`,
+          )
+          .join('');
+        return `<li><a href="#${entry.id}">${escapeHtml(entry.label)}</a>${items ? `<ul>${items}</ul>` : ''}</li>`;
+      })
+      .join('') +
+    '</ul></nav>\n';
+
+  // The numbers a reader wants first, each a link to where it is explained.
+  const { counts } = model;
+  const firstFlow = toc[0]?.id ?? 'summary';
+  const failing = toc.flatMap((entry) => entry.items).find((item) => !item.passed);
+  const tiles = [
+    [`${counts.scenariosPassed} of ${counts.scenarios}`, counts.scenarios === 1 ? 'scenario passes' : 'scenarios pass', failing?.id ?? firstFlow, model.passed ? 'good' : 'bad'],
+    [`${counts.requirementsCovered} of ${counts.requirements}`, 'requirements proven', 'requirements', counts.requirementsCovered === counts.requirements ? 'good' : 'warn'],
+    [String(counts.statesMissing), counts.statesMissing === 1 ? 'state not shown' : 'states not shown', 'states', counts.statesMissing ? 'warn' : 'good'],
+    [String(model.openQuestions.length), model.openQuestions.length === 1 ? 'open question' : 'open questions', 'questions', model.openQuestions.length ? 'warn' : 'good'],
+  ];
+  const stats =
+    '<ul class="stats no-copy">' +
+    tiles.map(([value, label, id, tone]) => `<li class="is-${tone}"><a href="#${id}"><strong>${escapeHtml(value)}</strong><span>${escapeHtml(label)}</span></a></li>`).join('') +
+    '</ul>';
+
   return (
     '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8" />\n' +
     '<meta name="viewport" content="width=device-width, initial-scale=1" />\n' +
     `<title>Handoff: ${escapeHtml(meta.title)}</title>\n<style>${STYLE}</style>\n</head>\n<body>\n` +
+    nav +
     '<main data-block="all">\n' +
     `<header><div class="head" style="border:0;margin:0;padding:0"><p class="eyebrow">${icon}<span>${escapeHtml(eyebrow)}</span></p>` +
     '<span class="tools no-copy"><button type="button" data-copy="text">Copy whole page as text</button></span></div>' +
-    `<h1>${escapeHtml(meta.title)}</h1></header>\n` +
+    `<h1>${escapeHtml(meta.title)}</h1>${stats}</header>\n` +
     parts.join('\n') +
     '\n<footer class="no-copy">Made with Specsheet. Every step on this page was run against the prototype in a browser.</footer>\n' +
     '</main>\n' +

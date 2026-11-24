@@ -144,7 +144,7 @@ export async function build(dir, { png = true, videos, log = () => {} } = {}) {
   }
 
   const config = loadConfig(dir);
-  const { requirements, openQuestions } = loadRequirements(dir);
+  const { requirements, openQuestions, assumed } = loadRequirements(dir);
   const results = readJson(resultsFile);
   for (const scenario of results.scenarios ?? []) {
     if (scenario.video) scenario.video = path.resolve(out, scenario.video);
@@ -152,7 +152,7 @@ export async function build(dir, { png = true, videos, log = () => {} } = {}) {
       if (step.screenshot) step.screenshot = path.resolve(out, step.screenshot);
     }
   }
-  const model = buildModel({ results, config, requirements, openQuestions, staticFlows: readStaticFlows(dir) });
+  const model = buildModel({ results, config, requirements, openQuestions, assumed, staticFlows: readStaticFlows(dir) });
 
   for (const folder of ['screens', 'videos', 'features']) {
     fs.rmSync(path.join(out, folder), { recursive: true, force: true });
