@@ -66,6 +66,8 @@ export function loadConfig(dir) {
       throw new Error(`${CONFIG_FILE}: each viewport needs a name, a width and a height.`);
     }
   }
+  // No value, or null, means the usual limits.
+  config.warnAt ??= WARN_AT;
   if (typeof config.warnAt === 'number') {
     config.warnAt = { scenarios: config.warnAt, screens: config.warnAt, requirements: config.warnAt };
   } else {

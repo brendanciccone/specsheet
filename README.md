@@ -65,6 +65,23 @@ You get `handoff/HELP-12/out/handoff.html`: one file with the screenshots and vi
 inside, and a copy button on every section. Claude can also post it to Jira as a
 comment, always after showing you a preview.
 
+## Update
+
+To get a new version of the plugin, refresh the marketplace and update it from a
+terminal, then restart Claude Code:
+
+```bash
+claude plugin marketplace update specsheet
+```
+
+```bash
+claude plugin update specsheet@specsheet
+```
+
+That is all you do. The next time you ask for a handoff in a project, the skill checks
+the version of the program that project has. If it is older than the skill needs, it
+says so and, on your yes, runs the install command again to bring it up to date.
+
 ## See it first
 
 Run the example in this repository:

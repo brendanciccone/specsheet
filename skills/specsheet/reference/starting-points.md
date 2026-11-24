@@ -119,7 +119,8 @@ engineering.
 ## When you rebuilt the design
 
 With `design.rebuilt` set to `true`, the handoff says so in its summary: the original
-design is the reference for how it looks, and the prototype shows how it behaves.
+design is the reference for how it looks, and the prototype, with the screenshots and
+videos taken of it, shows how it behaves.
 
 Three things follow from that:
 

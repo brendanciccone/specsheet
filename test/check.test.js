@@ -118,12 +118,16 @@ test('recommends a split, without blocking, beyond the thresholds', () => {
 });
 
 test('the thresholds can be changed in the config, together or one at a time', () => {
+  const handoffNull = handoffFolder({ scenarios: 1 });
   assert.equal(sizeCheck(handoffFolder({ scenarios: 3, warnAt: 2 })).warnings.length, 1);
   assert.deepEqual(sizeCheck(handoffFolder({ scenarios: 13, warnAt: 20 })).warnings, []);
   const result = sizeCheck(handoffFolder({ scenarios: 9, warnAt: { screens: 30 } }));
   assert.deepEqual(result.warnings, []);
   assert.deepEqual(result.limits, { scenarios: 12, screens: 30, requirements: 8 });
   assert.throws(() => sizeCheck(handoffFolder({ warnAt: { pages: 3 } })), /"warnAt" takes a number/);
+  // null means the usual limits, as leaving it out does.
+  fs.writeFileSync(path.join(handoffNull, 'specsheet.config.json'), JSON.stringify({ title: 'Test', warnAt: null }));
+  assert.deepEqual(sizeCheck(handoffNull).limits, { scenarios: 12, screens: 8, requirements: 8 });
   for (const bad of [true, 'twelve', [12], { toString: 1 }, { scenarios: 0 }]) {
     assert.throws(() => sizeCheck(handoffFolder({ warnAt: bad })), /"warnAt" takes a number/, JSON.stringify(bad));
   }

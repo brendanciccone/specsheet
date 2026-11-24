@@ -28,12 +28,12 @@ const STYLE = `
 :root {
   color-scheme: light dark;
   --ink: #1a1a1a; --muted: #636363; --line: #dedede; --page: #ffffff; --soft: #f5f5f5;
-  --accent: #1a5fd0; --good: #2f5f0d; --bad: #a32d2d; --warn: #7a4708;
+  --accent: #1a5fd0; --good: #1a7f37; --bad: #cf222e; --warn: #b35900;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --ink: #ededed; --muted: #a8a8a8; --line: #3a3a3a; --page: #161616; --soft: #222222;
-    --accent: #8ab4f8; --good: #b7da8a; --bad: #f4a9a9; --warn: #f3c275;
+    --accent: #8ab4f8; --good: #56d364; --bad: #ff7b72; --warn: #f0a23b;
   }
 }
 * { box-sizing: border-box; }
@@ -64,9 +64,13 @@ main { max-width: 880px; margin: 0 auto; padding: 36px 20px 96px; }
 .stats a:hover { border-color: var(--muted); }
 .stats strong { display: block; font-size: 20px; line-height: 1.2; }
 .stats span { color: var(--muted); font-size: 13px; }
-.stats .is-bad strong { color: var(--bad); }
-.stats .is-warn strong { color: var(--warn); }
-.stats .is-good strong { color: var(--good); }
+.stats .is-bad { --tone: var(--bad); }
+.stats .is-warn { --tone: var(--warn); }
+.stats .is-good { --tone: var(--good); }
+.stats strong { color: var(--tone); }
+/* A light wash of the tile's colour, and a bar of it down the left edge. */
+.stats a { border-left: 4px solid var(--tone); border-color: color-mix(in srgb, var(--tone) 35%, var(--line)); border-left-color: var(--tone);
+  background: color-mix(in srgb, var(--tone) 7%, var(--page)); }
 footer svg { width: 16px; height: 16px; margin-right: 6px; vertical-align: -3px; }
 h1 { margin: 0; font-size: 30px; line-height: 1.2; text-wrap: balance; }
 h2 { margin: 0; font-size: 21px; line-height: 1.3; }
